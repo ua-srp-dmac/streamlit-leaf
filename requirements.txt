@@ -1,0 +1,9 @@
+opencv_python_headless
+streamlit
+mediapipe
+numpy
+Pillow
+
+requests
+pyyaml==5.1
+pyzbar
