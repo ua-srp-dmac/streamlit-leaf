@@ -9,6 +9,7 @@ from detectron2.config import get_cfg
 from detectron2.utils.visualizer import Visualizer, ColorMode
 from detectron2.data import MetadataCatalog, DatasetCatalog
 from detectron2.data.datasets import register_coco_instances
+from detectron2.data.catalog import Metadata
 
 import requests
 import argparse
@@ -194,8 +195,20 @@ elif app_mode =='Leaf Segmentation':
     leaf_count = len(pred_boxes)
     kpi1_text.write(f"<h1 style='text-align: center; color: red;'>{leaf_count}</h1>", unsafe_allow_html=True)
 
-    for bbox in pred_boxes:
-        print(bbox)
+    # for bbox in pred_boxes:
+    #     print(bbox)
+
+    leaf_metadata = Metadata()
+    leaf_metadata.set(thing_classes = ['leaf'])
+
+    v = Visualizer(image[:, :, ::-1],
+        metadata=leaf_metadata, 
+        scale=0.5, 
+        instance_mode=ColorMode.IMAGE_BW   # remove the colors of unsegmented pixels. This option is only available for segmentation models
+    )
+    out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+    st.subheader('Output Image')
+    st.image(out.get_image()[:, :, ::-1], use_column_width= True)
 
     # Dashboard
     # with mp_face_mesh.FaceMesh(
