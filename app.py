@@ -1,6 +1,20 @@
-#Modified by Augmented Startups 2021
-#Face Landmark User Interface with StreamLit
-#Watch Computer Vision Tutorials at www.augmentedstartups.info/YouTube
+import detectron2
+from detectron2.utils.logger import setup_logger
+setup_logger()
+
+# import some common detectron2 utilities
+from detectron2 import model_zoo
+from detectron2.engine import DefaultPredictor
+from detectron2.config import get_cfg
+from detectron2.utils.visualizer import Visualizer, ColorMode
+from detectron2.data import MetadataCatalog, DatasetCatalog
+from detectron2.data.datasets import register_coco_instances
+
+import requests
+import argparse
+
+import os, json, random
+
 import streamlit as st
 import mediapipe as mp
 import cv2
@@ -111,6 +125,104 @@ if app_mode =='About App':
 
 
 elif app_mode =='Leaf Segmentation':
+
+    
+    st.sidebar.markdown('---')
+
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
+            width: 400px;
+        }
+        [data-testid="stSidebar"][aria-expanded="false"] > div:first-child {
+            width: 400px;
+            margin-left: -400px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("**Detected Leaves**")
+    kpi1_text = st.markdown("0")
+    st.markdown('---')
+
+    # max_faces = st.sidebar.number_input('Maximum Number of Faces', value=2, min_value=1)
+    # st.sidebar.markdown('---')
+    # detection_confidence = st.sidebar.slider('Min Detection Confidence', min_value =0.0,max_value = 1.0,value = 0.5)
+    # st.sidebar.markdown('---')
+
+    img_file_buffer = st.sidebar.file_uploader("Upload an image", type=[ "jpg", "jpeg",'png'])
+
+    if img_file_buffer is not None:
+        image = np.array(Image.open(img_file_buffer))
+
+    else:
+        demo_image = DEMO_IMAGE
+        image = np.array(Image.open(demo_image))
+
+    st.sidebar.text('Original Image')
+    st.sidebar.image(image)
+    leaf_count = 0
+    
+    cfg = get_cfg()
+    cfg.MODEL.DEVICE='cpu'
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
+    cfg.DATASETS.TEST = ()
+    cfg.DATALOADER.NUM_WORKERS = 2
+    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")  # Let training initialize from model zoo
+    cfg.SOLVER.IMS_PER_BATCH = 2
+    cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
+    cfg.SOLVER.MAX_ITER = 1000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
+    cfg.SOLVER.STEPS = []        # do not decay learning rate
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (qrcode). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
+    cfg.MODEL.WEIGHTS = "leaf_model.pth"  # path to the model we just trained
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7   # set a custom testing threshold
+
+    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+    predictor = DefaultPredictor(cfg)
+
+    # test image
+    # im = cv2.imread(image)
+    outputs = predictor(image)  # format is documented at https://detectron2.readthedocs.io/tutorials/models.html#model-output-format
+
+    pred_boxes = outputs["instances"].pred_boxes
+
+    print("Found " + str(len(pred_boxes)) + " leaves")
+
+    leaf_count = len(pred_boxes)
+
+    for bbox in pred_boxes:
+        print(bbox)
+
+    # Dashboard
+    # with mp_face_mesh.FaceMesh(
+    # static_image_mode=True,
+    # max_num_faces=max_faces,
+    # min_detection_confidence=detection_confidence) as face_mesh:
+
+    #     results = face_mesh.process(image)
+    #     out_image = image.copy()
+
+    #     for face_landmarks in results.multi_face_landmarks:
+    #         leaf_count += 1
+
+    #         #print('face_landmarks:', face_landmarks)
+
+    #         mp_drawing.draw_landmarks(
+    #         image=out_image,
+    #         landmark_list=face_landmarks,
+    #         connections=mp_face_mesh.FACEMESH_CONTOURS,
+    #         landmark_drawing_spec=drawing_spec,
+    #         connection_drawing_spec=drawing_spec)
+    #         kpi1_text.write(f"<h1 style='text-align: center; color: red;'>{leaf_count}</h1>", unsafe_allow_html=True)
+    #     st.subheader('Output Image')
+    #     st.image(out_image,use_column_width= True)
+
+
+
+elif app_mode =='QR Code':
 
     drawing_spec = mp_drawing.DrawingSpec(thickness=2, circle_radius=1)
 
