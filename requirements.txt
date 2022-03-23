@@ -1,4 +1,6 @@
 streamlit
+streamlit-aggrid
+pandas
 mediapipe
 numpy
 Pillow

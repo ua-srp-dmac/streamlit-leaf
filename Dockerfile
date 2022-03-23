@@ -11,9 +11,13 @@ RUN git clone https://github.com/facebookresearch/detectron2 detectron2_repo
 
 RUN pip install -e detectron2_repo
 
-COPY . .
+WORKDIR /app
+COPY requirements.txt ./requirements.txt
 RUN pip install -r requirements.txt
+
 EXPOSE 8501
+
+COPY . /app
 
 ENTRYPOINT ["streamlit", "run"]
 

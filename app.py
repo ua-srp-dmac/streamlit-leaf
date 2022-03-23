@@ -23,6 +23,8 @@ import numpy as np
 import tempfile
 import time
 from PIL import Image
+import pandas as pd
+from st_aggrid import AgGrid
 
 mp_drawing = mp.solutions.drawing_utils
 mp_face_mesh = mp.solutions.face_mesh
@@ -48,6 +50,18 @@ st.markdown(
 
 st.sidebar.title('Leaf Segmentation')
 st.sidebar.subheader('Parameters')
+
+def get_dirs_inside_dir(folder):
+    return [my_dir for my_dir in list(map(lambda x:os.path.basename(x), sorted(Path(folder).iterdir(), key=os.path.getmtime, reverse=True))) if os.path.isdir(os.path.join(folder, my_dir))
+            and my_dir != '__pycache__' and my_dir != '.ipynb_checkpoints' and my_dir != 'API']
+
+def list_folders_in_folder(folder):
+    return [file for file in os.listdir(folder) if os.path.isdir(os.path.join(folder, file))]
+
+def show_dir_tree(folder):
+    with st.expander(f"Show {os.path.basename(folder)} folder tree"):
+        for line in tree(Path.home() / folder):
+            st.write(line)
 
 @st.cache()
 def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
@@ -210,6 +224,18 @@ elif app_mode =='Leaf Segmentation':
         out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
         st.subheader('Output Image')
         st.image(out.get_image()[:, :, ::-1], use_column_width= True)
+    
+    else:
+        file_names = []
+        dirs = []
+        # for dp, dn, filenames in os.walk("/data"):
+        for root, dirs, files in os.walk("/iplant/home/michellito"):
+            for file in files:
+                    filename=os.path.join(root, file)
+                    file_names.append(filename)
+
+        df = pd.DataFrame({'File_Name' : file_names})
+        AgGrid(df, fit_columns_on_grid_load=True)
 
 
 elif app_mode =='QR Code':
