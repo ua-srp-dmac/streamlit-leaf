@@ -192,6 +192,7 @@ elif app_mode =='Leaf Segmentation':
     print("Found " + str(len(pred_boxes)) + " leaves")
 
     leaf_count = len(pred_boxes)
+    kpi1_text.write(f"<h1 style='text-align: center; color: red;'>{leaf_count}</h1>", unsafe_allow_html=True)
 
     for bbox in pred_boxes:
         print(bbox)
