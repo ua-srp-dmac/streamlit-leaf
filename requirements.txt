@@ -4,6 +4,7 @@ pandas
 mediapipe
 numpy
 Pillow
+click==8.0.4
 
 requests
 pyyaml==5.1

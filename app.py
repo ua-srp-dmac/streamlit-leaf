@@ -25,6 +25,7 @@ import time
 from PIL import Image
 import pandas as pd
 from st_aggrid import AgGrid
+from st_aggrid.grid_options_builder import GridOptionsBuilder
 
 mp_drawing = mp.solutions.drawing_utils
 mp_face_mesh = mp.solutions.face_mesh
@@ -98,7 +99,7 @@ def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
 # App modes
 app_mode = st.sidebar.selectbox(
     'Choose the App mode', [
-        'About App',
+        # 'About App',
         'Leaf Segmentation',
         'QR Code'
     ]
@@ -121,22 +122,7 @@ if app_mode =='About App':
         unsafe_allow_html=True,
     )
 
-    st.markdown('''
-          # About Me \n 
-            Hey this is ** Ritesh Kanjee ** from **Augmented Startups**. \n
-           
-            If you are interested in building more Computer Vision apps like this one then visit the **Vision Store** at
-            www.augmentedstartups.info/visionstore \n
-            
-            Also check us out on Social Media
-            - [YouTube](https://augmentedstartups.info/YouTube)
-            - [LinkedIn](https://augmentedstartups.info/LinkedIn)
-            - [Facebook](https://augmentedstartups.info/Facebook)
-            - [Discord](https://augmentedstartups.info/Discord)
-        
-            If you are feeling generous you can buy me a **cup of  coffee ** from [HERE](https://augmentedstartups.info/ByMeACoffee)
-             
-            ''')
+
 
 
 elif app_mode =='Leaf Segmentation':
@@ -235,7 +221,15 @@ elif app_mode =='Leaf Segmentation':
                     file_names.append(filename)
 
         df = pd.DataFrame({'File_Name' : file_names})
-        AgGrid(df, fit_columns_on_grid_load=True)
+
+        gd = GridOptionsBuilder.from_dataframe(df)
+        # gd.configure_pagination(enabled=True)
+        # gd.configure_default_column(editable=True, groupable=True)
+        gd.configure_selection(selection_mode="multiple", use_checkbox=True)
+        grid_options = gd.build()
+
+        AgGrid(df, fit_columns_on_grid_load=True, gridOptions=grid_options)
+
 
 
 elif app_mode =='QR Code':
