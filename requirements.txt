@@ -5,6 +5,7 @@ mediapipe
 numpy
 Pillow
 click==8.0.4
+streamlit-option-menu
 
 requests
 pyyaml==5.1

@@ -24,8 +24,9 @@ import tempfile
 import time
 from PIL import Image
 import pandas as pd
-from st_aggrid import AgGrid
+from st_aggrid import AgGrid, GridUpdateMode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
+from streamlit_option_menu import option_menu
 
 mp_drawing = mp.solutions.drawing_utils
 mp_face_mesh = mp.solutions.face_mesh
@@ -34,23 +35,28 @@ DEMO_IMAGE = '250-8.JPG'
 
 st.title('Leaf Segmentation')
 
-st.markdown(
-    """
-    <style>
-    [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
-        width: 350px;
-    }
-    [data-testid="stSidebar"][aria-expanded="false"] > div:first-child {
-        width: 350px;
-        margin-left: -350px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+main_menu = option_menu(None, ["Home", "Results", "Upload", 'About'], 
+    icons=['house', 'cloud-upload', "list-task", 'gear'], 
+    menu_icon="cast", default_index=0, orientation="horizontal")
 
-st.sidebar.title('Leaf Segmentation')
-st.sidebar.subheader('Parameters')
+# sidebar
+# st.markdown(
+#     """
+#     <style>
+#     [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
+#         width: 350px;
+#     }
+#     [data-testid="stSidebar"][aria-expanded="false"] > div:first-child {
+#         width: 350px;
+#         margin-left: -350px;
+#     }
+#     </style>
+#     """,
+#     unsafe_allow_html=True,
+# )
+
+# st.sidebar.title('Leaf Segmentation')
+# st.sidebar.subheader('Parameters')
 
 def get_dirs_inside_dir(folder):
     return [my_dir for my_dir in list(map(lambda x:os.path.basename(x), sorted(Path(folder).iterdir(), key=os.path.getmtime, reverse=True))) if os.path.isdir(os.path.join(folder, my_dir))
@@ -96,71 +102,51 @@ def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
     # return the resized image
     return resized
 
-# App modes
-app_mode = st.sidebar.selectbox(
-    'Choose the App mode', [
-        # 'About App',
-        'Leaf Segmentation',
-        'QR Code'
-    ]
-)
 
-if app_mode =='About App':
+if main_menu =='About':
     st.markdown('In this application we are using **MediaPipe** for creating a Face Mesh. **StreamLit** is to create the Web Graphical User Interface (GUI) ')
-    st.markdown(
-        """
-        <style>
-        [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
-            width: 400px;
-        }
-        [data-testid="stSidebar"][aria-expanded="false"] > div:first-child {
-            width: 400px;
-            margin-left: -400px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
-
-
-
-elif app_mode =='Leaf Segmentation':
-
-    
-    st.sidebar.markdown('---')
-
-    st.markdown(
-        """
-        <style>
-        [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
-            width: 400px;
-        }
-        [data-testid="stSidebar"][aria-expanded="false"] > div:first-child {
-            width: 400px;
-            margin-left: -400px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
+elif main_menu =="Results":
     st.markdown("**Detected Leaves**")
     kpi1_text = st.markdown("0")
     st.markdown('---')
 
-    # max_faces = st.sidebar.number_input('Maximum Number of Faces', value=2, min_value=1)
-    # st.sidebar.markdown('---')
-    # detection_confidence = st.sidebar.slider('Min Detection Confidence', min_value =0.0,max_value = 1.0,value = 0.5)
-    # st.sidebar.markdown('---')
-
+elif main_menu == 'Upload':
     img_file_buffer = st.sidebar.file_uploader("Upload an image", type=[ "jpg", "jpeg",'png'])
+
+elif main_menu =='Home':
+
+    file_names = []
+    dirs = []
+    # for dp, dn, filenames in os.walk("/data"):
+    for root, dirs, files in os.walk("/iplant/home/michellito"):
+        for file in files:
+                filename=os.path.join(root, file)
+                file_names.append(filename)
+
+    df = pd.DataFrame({'File Name' : file_names})
+
+    gd = GridOptionsBuilder.from_dataframe(df)
+    gd.configure_pagination(enabled=True)
+    # gd.configure_default_column(editable=True, groupable=True)
+    # if selected_all:
+
+    # else:
+    gd.configure_selection(selection_mode="multiple", use_checkbox=True)
+    gd.configure_column("File Name", headerCheckboxSelection = True)
+
+    file_table = AgGrid(df, fit_columns_on_grid_load=True, gridOptions=gd.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
+
+    check = st.button('Check')
+
+    if check:
+        selected_rows = file_table["selected_rows"]
+        print(selected_rows)
 
     # st.sidebar.text('Original Image')
     # st.sidebar.image(image)
-    run = st.sidebar.button('Run')
+    run = st.button('Run')
     
-
     if run:
 
         leaf_count = 0
@@ -210,29 +196,11 @@ elif app_mode =='Leaf Segmentation':
         out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
         st.subheader('Output Image')
         st.image(out.get_image()[:, :, ::-1], use_column_width= True)
-    
-    else:
-        file_names = []
-        dirs = []
-        # for dp, dn, filenames in os.walk("/data"):
-        for root, dirs, files in os.walk("/iplant/home/michellito"):
-            for file in files:
-                    filename=os.path.join(root, file)
-                    file_names.append(filename)
-
-        df = pd.DataFrame({'File_Name' : file_names})
-
-        gd = GridOptionsBuilder.from_dataframe(df)
-        # gd.configure_pagination(enabled=True)
-        # gd.configure_default_column(editable=True, groupable=True)
-        gd.configure_selection(selection_mode="multiple", use_checkbox=True)
-        grid_options = gd.build()
-
-        AgGrid(df, fit_columns_on_grid_load=True, gridOptions=grid_options)
+ 
+        
 
 
-
-elif app_mode =='QR Code':
+elif main_menu =='QR Code':
 
     drawing_spec = mp_drawing.DrawingSpec(thickness=2, circle_radius=1)
 
