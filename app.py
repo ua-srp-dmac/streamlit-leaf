@@ -199,7 +199,7 @@ def run_inference(batch):
         result_image = Image.fromarray(result_arr)
 
         if qr_result_decoded:
-            save_path = Path("/results/" + qr_result_decoded + "result.jpg")
+            save_path = Path("/results/" + qr_result_decoded + "-result.jpg")
         else:
             save_path = Path("/results/result.jpg")
 
@@ -232,10 +232,10 @@ elif main_menu =="Results":
     
     if visualize:
 
-        selected_result = file_table["selected_rows"][0]
-        print(selected_result)
+        selected_result = file_table["selected_rows"]
+        file_name = selected_result[0]['File Name']
 
-        image = Image.open(selected_result["File Name"])
+        image = Image.open(file_name)
         # leaf_count = len(pred_boxes)
         # # kpi1_text.write(f"<h1 style='text-align: center; color: red;'>{leaf_count}</h1>", unsafe_allow_html=True)
         st.subheader('Output Image')
