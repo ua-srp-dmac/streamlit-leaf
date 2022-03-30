@@ -10,6 +10,8 @@ from detectron2.utils.visualizer import Visualizer, ColorMode
 from detectron2.data import MetadataCatalog, DatasetCatalog
 from detectron2.data.datasets import register_coco_instances
 from detectron2.data.catalog import Metadata
+from detectron2.modeling import build_model
+from detectron2.checkpoint import DetectionCheckpointer
 
 import requests
 import argparse
@@ -28,8 +30,8 @@ from st_aggrid import AgGrid, GridUpdateMode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 from streamlit_option_menu import option_menu
 
-mp_drawing = mp.solutions.drawing_utils
-mp_face_mesh = mp.solutions.face_mesh
+from torchvision import transforms
+
 
 DEMO_IMAGE = '250-8.JPG'
 
@@ -102,6 +104,61 @@ def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
     # return the resized image
     return resized
 
+@st.cache()
+def run_inference(batch):
+
+    print(batch)
+
+    cfg = get_cfg()
+    cfg.MODEL.DEVICE='cpu'
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
+    cfg.DATASETS.TEST = ()
+    cfg.DATALOADER.NUM_WORKERS = 2
+    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")  # Let training initialize from model zoo
+    cfg.SOLVER.IMS_PER_BATCH = 2
+    cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
+    cfg.SOLVER.MAX_ITER = 1000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
+    cfg.SOLVER.STEPS = []        # do not decay learning rate
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (qrcode). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
+    cfg.MODEL.WEIGHTS = "leaf_model.pth"  # path to the model we just trained
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7   # set a custom testing threshold
+
+    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+
+    # model = build_model(cfg)
+    # DetectionCheckpointer(model).load('leaf_model.pth')
+    # model.train(False)
+    # outputs = model(batch)
+
+    predictor = DefaultPredictor(cfg)
+    outputs = []
+
+    for image in batch:
+        outputs.append(predictor(image["image"]))
+
+    # test image
+    # outputs = predictor(batch)  # format is documented at https://detectron2.readthedocs.io/tutorials/models.html#model-output-format
+
+    print(outputs)
+    # pred_boxes = outputs["instances"].pred_boxes
+
+    # print("Found " + str(len(pred_boxes)) + " leaves")
+
+    # leaf_count = len(pred_boxes)
+    # kpi1_text.write(f"<h1 style='text-align: center; color: red;'>{leaf_count}</h1>", unsafe_allow_html=True)
+
+    # leaf_metadata = Metadata()
+    # leaf_metadata.set(thing_classes = ['leaf'])
+
+    # v = Visualizer(image[:, :, ::-1],
+    #     metadata=leaf_metadata, 
+    #     scale=0.5, 
+    #     instance_mode=ColorMode.IMAGE_BW   # remove the colors of unsegmented pixels. This option is only available for segmentation models
+    # )
+    # out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+    # st.subheader('Output Image')
+    # st.image(out.get_image()[:, :, ::-1], use_column_width= True)
+
 
 if main_menu =='About':
     st.markdown('In this application we are using **MediaPipe** for creating a Face Mesh. **StreamLit** is to create the Web Graphical User Interface (GUI) ')
@@ -112,13 +169,13 @@ elif main_menu =="Results":
     st.markdown('---')
 
 elif main_menu == 'Upload':
-    img_file_buffer = st.sidebar.file_uploader("Upload an image", type=[ "jpg", "jpeg",'png'])
+    img_file_buffer = st.file_uploader("Upload an image", type=[ "jpg", "jpeg",'png'])
 
 elif main_menu =='Home':
 
     file_names = []
     dirs = []
-    # for dp, dn, filenames in os.walk("/data"):
+
     for root, dirs, files in os.walk("/iplant/home/michellito"):
         for file in files:
                 filename=os.path.join(root, file)
@@ -128,20 +185,10 @@ elif main_menu =='Home':
 
     gd = GridOptionsBuilder.from_dataframe(df)
     gd.configure_pagination(enabled=True)
-    # gd.configure_default_column(editable=True, groupable=True)
-    # if selected_all:
-
-    # else:
     gd.configure_selection(selection_mode="multiple", use_checkbox=True)
     gd.configure_column("File Name", headerCheckboxSelection = True)
 
     file_table = AgGrid(df, fit_columns_on_grid_load=True, gridOptions=gd.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
-
-    check = st.button('Check')
-
-    if check:
-        selected_rows = file_table["selected_rows"]
-        print(selected_rows)
 
     # st.sidebar.text('Original Image')
     # st.sidebar.image(image)
@@ -149,122 +196,29 @@ elif main_menu =='Home':
     
     if run:
 
-        leaf_count = 0
+        # set up batch
+        selected_rows = file_table["selected_rows"]
+        print(selected_rows)
+        batch = []
 
-        if img_file_buffer is not None:
-            image = np.array(Image.open(img_file_buffer))
-
-        else:
-            demo_image = DEMO_IMAGE
-            image = np.array(Image.open(demo_image))
-    
-        cfg = get_cfg()
-        cfg.MODEL.DEVICE='cpu'
-        cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
-        cfg.DATASETS.TEST = ()
-        cfg.DATALOADER.NUM_WORKERS = 2
-        cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")  # Let training initialize from model zoo
-        cfg.SOLVER.IMS_PER_BATCH = 2
-        cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
-        cfg.SOLVER.MAX_ITER = 1000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
-        cfg.SOLVER.STEPS = []        # do not decay learning rate
-        cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (qrcode). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
-        cfg.MODEL.WEIGHTS = "leaf_model.pth"  # path to the model we just trained
-        cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7   # set a custom testing threshold
-
-        os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
-        predictor = DefaultPredictor(cfg)
-
-        # test image
-        outputs = predictor(image)  # format is documented at https://detectron2.readthedocs.io/tutorials/models.html#model-output-format
-
-        pred_boxes = outputs["instances"].pred_boxes
-
-        print("Found " + str(len(pred_boxes)) + " leaves")
-
-        leaf_count = len(pred_boxes)
-        kpi1_text.write(f"<h1 style='text-align: center; color: red;'>{leaf_count}</h1>", unsafe_allow_html=True)
-
-        leaf_metadata = Metadata()
-        leaf_metadata.set(thing_classes = ['leaf'])
-
-        v = Visualizer(image[:, :, ::-1],
-            metadata=leaf_metadata, 
-            scale=0.5, 
-            instance_mode=ColorMode.IMAGE_BW   # remove the colors of unsegmented pixels. This option is only available for segmentation models
-        )
-        out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-        st.subheader('Output Image')
-        st.image(out.get_image()[:, :, ::-1], use_column_width= True)
- 
+        convert_tensor = transforms.ToTensor()
         
+        for row in selected_rows:
+            image = Image.open(row["File Name"])
+            batch.append({"image": np.array(image)})
+        
+        run_inference(batch)
 
+        # leaf_count = 0
 
-elif main_menu =='QR Code':
+        # if img_file_buffer is not None:
+        #     image = np.array(Image.open(img_file_buffer))
 
-    drawing_spec = mp_drawing.DrawingSpec(thickness=2, circle_radius=1)
-
-    st.sidebar.markdown('---')
-
-    st.markdown(
-        """
-        <style>
-        [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
-            width: 400px;
-        }
-        [data-testid="stSidebar"][aria-expanded="false"] > div:first-child {
-            width: 400px;
-            margin-left: -400px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown("**Detected Leaves**")
-    kpi1_text = st.markdown("0")
-    st.markdown('---')
-
-    max_faces = st.sidebar.number_input('Maximum Number of Faces', value=2, min_value=1)
-    st.sidebar.markdown('---')
-    detection_confidence = st.sidebar.slider('Min Detection Confidence', min_value =0.0,max_value = 1.0,value = 0.5)
-    st.sidebar.markdown('---')
-
-    img_file_buffer = st.sidebar.file_uploader("Upload an image", type=[ "jpg", "jpeg",'png'])
-
-    if img_file_buffer is not None:
-        image = np.array(Image.open(img_file_buffer))
-
-    else:
-        demo_image = DEMO_IMAGE
-        image = np.array(Image.open(demo_image))
-
-    st.sidebar.text('Original Image')
-    st.sidebar.image(image)
-    leaf_count = 0
+        # else:
+        #     demo_image = DEMO_IMAGE
+        #     image = np.array(Image.open(demo_image))
     
-    
-    # Dashboard
-    with mp_face_mesh.FaceMesh(
-    static_image_mode=True,
-    max_num_faces=max_faces,
-    min_detection_confidence=detection_confidence) as face_mesh:
 
-        results = face_mesh.process(image)
-        out_image = image.copy()
 
-        for face_landmarks in results.multi_face_landmarks:
-            leaf_count += 1
-
-            #print('face_landmarks:', face_landmarks)
-
-            mp_drawing.draw_landmarks(
-            image=out_image,
-            landmark_list=face_landmarks,
-            connections=mp_face_mesh.FACEMESH_CONTOURS,
-            landmark_drawing_spec=drawing_spec,
-            connection_drawing_spec=drawing_spec)
-            kpi1_text.write(f"<h1 style='text-align: center; color: red;'>{leaf_count}</h1>", unsafe_allow_html=True)
-        st.subheader('Output Image')
-        st.image(out_image,use_column_width= True)
-# Watch Tutorial at www.augmentedstartups.info/YouTube
+ 
+            
