@@ -12,6 +12,7 @@ from detectron2.data.datasets import register_coco_instances
 from detectron2.data.catalog import Metadata
 from detectron2.modeling import build_model
 from detectron2.checkpoint import DetectionCheckpointer
+from pathlib import Path
 
 import requests
 import argparse
@@ -126,45 +127,71 @@ def run_inference(batch):
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
 
     predictor = DefaultPredictor(cfg)
-    outputs = []
 
-    for image in batch:
-        output = predictor(image["image"])
-        print(output["instances"])
-        outputs.append(output)
+    leaf_metadata = Metadata()
+    leaf_metadata.set(thing_classes = ['leaf'])
 
+    if not os.path.isdir('/results'):
+        os.mkdir('/results') 
 
-    # test image
-    # outputs = predictor(batch)  # format is documented at https://detectron2.readthedocs.io/tutorials/models.html#model-output-format
+    for index, image in enumerate(batch):
 
-    # print(outputs["instances"].pred_boxes)
-    # pred_boxes = outputs["instances"].pred_boxes
+        outputs = predictor(image["image"])
+        # pred_boxes = outputs["instances"].pred_boxes
+        print("Found " + str(len(pred_boxes)) + " leaves")
 
-    # print("Found " + str(len(pred_boxes)) + " leaves")
+        v = Visualizer(image["image"][:, :, ::-1],
+            metadata=leaf_metadata, 
+            scale=0.5, 
+            instance_mode=ColorMode.IMAGE_BW   # remove the colors of unsegmented pixels. This option is only available for segmentation models
+        )
 
-    # leaf_count = len(pred_boxes)
-    # kpi1_text.write(f"<h1 style='text-align: center; color: red;'>{leaf_count}</h1>", unsafe_allow_html=True)
-
-    # leaf_metadata = Metadata()
-    # leaf_metadata.set(thing_classes = ['leaf'])
-
-    # v = Visualizer(image[:, :, ::-1],
-    #     metadata=leaf_metadata, 
-    #     scale=0.5, 
-    #     instance_mode=ColorMode.IMAGE_BW   # remove the colors of unsegmented pixels. This option is only available for segmentation models
-    # )
-    # out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-    # st.subheader('Output Image')
-    # st.image(out.get_image()[:, :, ::-1], use_column_width= True)
+        out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+        result_arr = out.get_image()[:, :, ::-1]
+        result_image = Image.fromarray(result_arr)
+        save_path = Path("/results/result_" + str(index) + ".jpg")
+        result_image.save(save_path)
 
 
 if main_menu =='About':
     st.markdown('In this application we are using **MediaPipe** for creating a Face Mesh. **StreamLit** is to create the Web Graphical User Interface (GUI) ')
 
 elif main_menu =="Results":
-    st.markdown("**Detected Leaves**")
-    kpi1_text = st.markdown("0")
-    st.markdown('---')
+
+    file_names = []
+    dirs = []
+
+    for root, dirs, files in os.walk("/results"):
+        for file in files:
+                filename=os.path.join(root, file)
+                file_names.append(filename)
+
+    df = pd.DataFrame({'File Name' : file_names})
+
+    gd = GridOptionsBuilder.from_dataframe(df)
+    gd.configure_pagination(enabled=True)
+    gd.configure_selection(selection_mode="single", use_checkbox=True)
+    gd.configure_column("File Name", headerCheckboxSelection = True)
+
+    file_table = AgGrid(df, fit_columns_on_grid_load=True, gridOptions=gd.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
+
+    visualize = st.button('Visualize')
+    
+    if visualize:
+
+        selected_result = file_table["selected_rows"][0]
+        print(selected_result)
+
+        image = Image.open(selected_result["File Name"])
+        # leaf_count = len(pred_boxes)
+        # # kpi1_text.write(f"<h1 style='text-align: center; color: red;'>{leaf_count}</h1>", unsafe_allow_html=True)
+        st.subheader('Output Image')
+        st.image(image)
+    
+        # st.markdown("**Detected Leaves**")
+        # kpi1_text = st.markdown("0")
+        # st.markdown('---')
+   
 
 elif main_menu == 'Upload':
     img_file_buffer = st.file_uploader("Upload an image", type=[ "jpg", "jpeg",'png'])
