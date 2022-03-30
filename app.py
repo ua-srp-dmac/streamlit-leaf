@@ -31,6 +31,9 @@ from st_aggrid import AgGrid, GridUpdateMode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 from streamlit_option_menu import option_menu
 
+from pyzbar.pyzbar import decode
+from pyzbar.pyzbar import ZBarSymbol
+
 from torchvision import transforms
 
 
@@ -110,23 +113,41 @@ def run_inference(batch):
 
     print(batch)
 
-    cfg = get_cfg()
-    cfg.MODEL.DEVICE='cpu'
-    cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
-    cfg.DATASETS.TEST = ()
-    cfg.DATALOADER.NUM_WORKERS = 2
-    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")  # Let training initialize from model zoo
-    cfg.SOLVER.IMS_PER_BATCH = 2
-    cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
-    cfg.SOLVER.MAX_ITER = 1000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
-    cfg.SOLVER.STEPS = []        # do not decay learning rate
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (qrcode). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
-    cfg.MODEL.WEIGHTS = "leaf_model.pth"  # path to the model we just trained
-    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7   # set a custom testing threshold
+    leaf_cfg = get_cfg()
+    leaf_cfg.MODEL.DEVICE='cpu'
+    leaf_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
+    leaf_cfg.DATASETS.TEST = ()
+    leaf_cfg.DATALOADER.NUM_WORKERS = 2
+    leaf_cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")  # Let training initialize from model zoo
+    leaf_cfg.SOLVER.IMS_PER_BATCH = 2
+    leaf_cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
+    leaf_cfg.SOLVER.MAX_ITER = 1000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
+    leaf_cfg.SOLVER.STEPS = []        # do not decay learning rate
+    leaf_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (qrcode). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
+    leaf_cfg.MODEL.WEIGHTS = "leaf_model.pth"  # path to the model we just trained
+    leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7   # set a custom testing threshold
 
-    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+    os.makedirs(leaf_cfg.OUTPUT_DIR, exist_ok=True)
 
-    predictor = DefaultPredictor(cfg)
+    leaf_predictor = DefaultPredictor(leaf_cfg)
+
+    qr_cfg = get_cfg()
+    qr_cfg.MODEL.DEVICE='cpu'
+    qr_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
+    qr_cfg.DATASETS.TEST = ()
+    qr_cfg.DATALOADER.NUM_WORKERS = 2
+    qr_cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")  # Let training initialize from model zoo
+    qr_cfg.SOLVER.IMS_PER_BATCH = 2
+    qr_cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
+    qr_cfg.SOLVER.MAX_ITER = 1000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
+    qr_cfg.SOLVER.STEPS = []        # do not decay learning rate
+    qr_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (qrcode). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
+    qr_cfg.MODEL.WEIGHTS = "qr_model.pth"  # path to the model we just trained
+    qr_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7   # set a custom testing threshold
+
+    os.makedirs(qr_cfg.OUTPUT_DIR, exist_ok=True)
+
+    qr_predictor = DefaultPredictor(qr_cfg)
 
     leaf_metadata = Metadata()
     leaf_metadata.set(thing_classes = ['leaf'])
@@ -136,9 +157,36 @@ def run_inference(batch):
 
     for index, image in enumerate(batch):
 
-        outputs = predictor(image["image"])
-        # pred_boxes = outputs["instances"].pred_boxes
-        print("Found " + str(len(pred_boxes)) + " leaves")
+        leaf_outputs = leaf_predictor(image["image"])
+        qr_outputs = qr_predictor(image["image"])
+        # pred_boxes = leaf_outputs["instances"].pred_boxes
+        # print("Found " + str(len(pred_boxes)) + " leaves")
+
+        pred_boxes = qr_outputs["instances"].pred_boxes
+
+        qr_result_decoded = None
+
+        qr_bbox = pred_boxes.tensor.numpy()
+
+        print(qr_bbox)
+
+        if len(qr_bbox):
+
+            bbox = qr_bbox[0]
+
+            # (x0, y0, x1, y1)
+
+            x0 = round(bbox[0].item())
+            y0 = round(bbox[1].item())
+            x1 = round(bbox[2].item())
+            y1 = round(bbox[3].item())
+
+            crop_img = image["image"][ y0:y1, x0:x1]
+
+            # zbar
+            qr_result = decode(crop_img, symbols=[ZBarSymbol.QRCODE])
+            print(qr_result[0].data )
+            qr_result_decoded = qr_result[0].data.decode("utf-8") 
 
         v = Visualizer(image["image"][:, :, ::-1],
             metadata=leaf_metadata, 
@@ -146,10 +194,15 @@ def run_inference(batch):
             instance_mode=ColorMode.IMAGE_BW   # remove the colors of unsegmented pixels. This option is only available for segmentation models
         )
 
-        out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+        out = v.draw_instance_predictions(leaf_outputs["instances"].to("cpu"))
         result_arr = out.get_image()[:, :, ::-1]
         result_image = Image.fromarray(result_arr)
-        save_path = Path("/results/result_" + str(index) + ".jpg")
+
+        if qr_result_decoded:
+            save_path = Path("/results/" + qr_result_decoded + "result.jpg")
+        else:
+            save_path = Path("/results/result.jpg")
+
         result_image.save(save_path)
 
 
