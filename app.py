@@ -125,21 +125,19 @@ def run_inference(batch):
 
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
 
-    # model = build_model(cfg)
-    # DetectionCheckpointer(model).load('leaf_model.pth')
-    # model.train(False)
-    # outputs = model(batch)
-
     predictor = DefaultPredictor(cfg)
     outputs = []
 
     for image in batch:
-        outputs.append(predictor(image["image"]))
+        output = predictor(image["image"])
+        print(output["instances"])
+        outputs.append(output)
+
 
     # test image
     # outputs = predictor(batch)  # format is documented at https://detectron2.readthedocs.io/tutorials/models.html#model-output-format
 
-    print(outputs)
+    # print(outputs["instances"].pred_boxes)
     # pred_boxes = outputs["instances"].pred_boxes
 
     # print("Found " + str(len(pred_boxes)) + " leaves")
