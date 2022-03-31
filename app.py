@@ -41,8 +41,8 @@ DEMO_IMAGE = '250-8.JPG'
 
 st.title('Leaf Segmentation')
 
-main_menu = option_menu(None, ["Home", "Results", "Upload", 'About'], 
-    icons=['house', 'cloud-upload', "list-task", 'gear'], 
+main_menu = option_menu(None, ["Home", "Results"], 
+    icons=['house', 'cloud-upload'], 
     menu_icon="cast", default_index=0, orientation="horizontal")
 
 # sidebar
@@ -263,7 +263,7 @@ elif main_menu =='Home':
 
     gd = GridOptionsBuilder.from_dataframe(df)
     gd.configure_pagination(enabled=True)
-    gd.configure_selection(selection_mode="multiple", use_checkbox=True)
+    gd.configure_selection(selection_mode="single", use_checkbox=True)
     gd.configure_column("File Name", headerCheckboxSelection = True)
 
     file_table = AgGrid(df, fit_columns_on_grid_load=True, gridOptions=gd.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
@@ -286,6 +286,8 @@ elif main_menu =='Home':
             batch.append({"image": np.array(image)})
         
         run_inference(batch)
+
+        # main_menu = "Results"
 
         # leaf_count = 0
 
