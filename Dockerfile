@@ -13,13 +13,13 @@ RUN pip install -e detectron2_repo
 
 WORKDIR /app
 COPY requirements.txt ./requirements.txt
+COPY entry.sh /bin
 RUN pip install -r requirements.txt
 
 EXPOSE 8501
 
 COPY . /app
 
-ENTRYPOINT ["streamlit", "run"]
 
-CMD ["app.py"]
+ENTRYPOINT ["bash", "/bin/entry.sh"]
 
