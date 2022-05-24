@@ -45,6 +45,49 @@ main_menu = option_menu(None, ["Home", "Results"],
     icons=['house', 'cloud-upload'], 
     menu_icon="cast", default_index=0, orientation="horizontal")
 
+leaf_cfg = get_cfg()
+leaf_cfg.MODEL.DEVICE='cpu'
+leaf_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
+leaf_cfg.DATASETS.TEST = ()
+leaf_cfg.DATALOADER.NUM_WORKERS = 2
+leaf_cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")  # Let training initialize from model zoo
+leaf_cfg.SOLVER.IMS_PER_BATCH = 2
+leaf_cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
+leaf_cfg.SOLVER.MAX_ITER = 1000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
+leaf_cfg.SOLVER.STEPS = []        # do not decay learning rate
+leaf_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (qrcode). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
+leaf_cfg.MODEL.WEIGHTS = "/models/leaf_model.pth"  # path to the model we just trained
+leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7   # set a custom testing threshold
+
+os.makedirs(leaf_cfg.OUTPUT_DIR, exist_ok=True)
+
+leaf_predictor = DefaultPredictor(leaf_cfg)
+
+# qr_cfg = get_cfg()
+# qr_cfg.MODEL.DEVICE='cpu'
+# qr_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
+# qr_cfg.DATASETS.TEST = ()
+# qr_cfg.DATALOADER.NUM_WORKERS = 2
+# qr_cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")  # Let training initialize from model zoo
+# qr_cfg.SOLVER.IMS_PER_BATCH = 2
+# qr_cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
+# qr_cfg.SOLVER.MAX_ITER = 1000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
+# qr_cfg.SOLVER.STEPS = []        # do not decay learning rate
+# qr_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (qrcode). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
+# qr_cfg.MODEL.WEIGHTS = "qr_model.pth"  # path to the model we just trained
+# qr_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7   # set a custom testing threshold
+
+# os.makedirs(qr_cfg.OUTPUT_DIR, exist_ok=True)
+
+# qr_predictor = DefaultPredictor(qr_cfg)
+
+leaf_metadata = Metadata()
+leaf_metadata.set(thing_classes = ['leaf'])
+
+if not os.path.isdir('/results'):
+    os.mkdir('/results') 
+
+
 # sidebar
 # st.markdown(
 #     """
@@ -113,80 +156,38 @@ def run_inference(batch):
 
     print(batch)
 
-    leaf_cfg = get_cfg()
-    leaf_cfg.MODEL.DEVICE='cpu'
-    leaf_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
-    leaf_cfg.DATASETS.TEST = ()
-    leaf_cfg.DATALOADER.NUM_WORKERS = 2
-    leaf_cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")  # Let training initialize from model zoo
-    leaf_cfg.SOLVER.IMS_PER_BATCH = 2
-    leaf_cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
-    leaf_cfg.SOLVER.MAX_ITER = 1000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
-    leaf_cfg.SOLVER.STEPS = []        # do not decay learning rate
-    leaf_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (qrcode). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
-    leaf_cfg.MODEL.WEIGHTS = "leaf_model.pth"  # path to the model we just trained
-    leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7   # set a custom testing threshold
-
-    os.makedirs(leaf_cfg.OUTPUT_DIR, exist_ok=True)
-
-    leaf_predictor = DefaultPredictor(leaf_cfg)
-
-    qr_cfg = get_cfg()
-    qr_cfg.MODEL.DEVICE='cpu'
-    qr_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
-    qr_cfg.DATASETS.TEST = ()
-    qr_cfg.DATALOADER.NUM_WORKERS = 2
-    qr_cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")  # Let training initialize from model zoo
-    qr_cfg.SOLVER.IMS_PER_BATCH = 2
-    qr_cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
-    qr_cfg.SOLVER.MAX_ITER = 1000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
-    qr_cfg.SOLVER.STEPS = []        # do not decay learning rate
-    qr_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (qrcode). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
-    qr_cfg.MODEL.WEIGHTS = "qr_model.pth"  # path to the model we just trained
-    qr_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7   # set a custom testing threshold
-
-    os.makedirs(qr_cfg.OUTPUT_DIR, exist_ok=True)
-
-    qr_predictor = DefaultPredictor(qr_cfg)
-
-    leaf_metadata = Metadata()
-    leaf_metadata.set(thing_classes = ['leaf'])
-
-    if not os.path.isdir('/results'):
-        os.mkdir('/results') 
-
     for index, image in enumerate(batch):
 
         leaf_outputs = leaf_predictor(image["image"])
-        qr_outputs = qr_predictor(image["image"])
+        # qr_outputs = qr_predictor(image["image"])
         # pred_boxes = leaf_outputs["instances"].pred_boxes
         # print("Found " + str(len(pred_boxes)) + " leaves")
 
-        pred_boxes = qr_outputs["instances"].pred_boxes
+        # pred_boxes = qr_outputs["instances"].pred_boxes
 
         qr_result_decoded = None
 
-        qr_bbox = pred_boxes.tensor.numpy()
+        # qr_bbox = pred_boxes.tensor.numpy()
 
-        print(qr_bbox)
+        # print(qr_bbox)
 
-        if len(qr_bbox):
+        # if len(qr_bbox):
 
-            bbox = qr_bbox[0]
+        #     bbox = qr_bbox[0]
 
-            # (x0, y0, x1, y1)
+        #     # (x0, y0, x1, y1)
 
-            x0 = round(bbox[0].item())
-            y0 = round(bbox[1].item())
-            x1 = round(bbox[2].item())
-            y1 = round(bbox[3].item())
+        #     x0 = round(bbox[0].item())
+        #     y0 = round(bbox[1].item())
+        #     x1 = round(bbox[2].item())
+        #     y1 = round(bbox[3].item())
 
-            crop_img = image["image"][ y0:y1, x0:x1]
+        #     crop_img = image["image"][ y0:y1, x0:x1]
 
-            # zbar
-            qr_result = decode(crop_img, symbols=[ZBarSymbol.QRCODE])
-            print(qr_result[0].data )
-            qr_result_decoded = qr_result[0].data.decode("utf-8") 
+        #     # zbar
+        #     qr_result = decode(crop_img, symbols=[ZBarSymbol.QRCODE])
+        #     print(qr_result[0].data )
+        #     qr_result_decoded = qr_result[0].data.decode("utf-8") 
 
         v = Visualizer(image["image"][:, :, ::-1],
             metadata=leaf_metadata, 
@@ -254,7 +255,7 @@ elif main_menu =='Home':
     file_names = []
     dirs = []
 
-    for root, dirs, files in os.walk("/iplant/home/michellito"):
+    for root, dirs, files in os.walk("/data"):
         for file in files:
                 filename=os.path.join(root, file)
                 file_names.append(filename)
