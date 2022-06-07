@@ -1,2 +1,1 @@
-cd ..
-exec streamlit run app.py
+exec streamlit run /app/simple-app.py

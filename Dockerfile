@@ -8,13 +8,15 @@ RUN pip install 'git+https://github.com/facebookresearch/fvcore'
 
 # install detectron2
 RUN git clone https://github.com/facebookresearch/detectron2 detectron2_repo
-
 RUN pip install -e detectron2_repo
 
-COPY app.py ./app.py
-COPY entry.sh /bin
+# install other requirements
 COPY requirements.txt ./requirements.txt
 RUN pip install -r requirements.txt
+
+COPY entry.sh /bin
+
+COPY . /app
 
 EXPOSE 8501
 
