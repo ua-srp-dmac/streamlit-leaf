@@ -1,1 +1,1 @@
-exec streamlit run /app/simple-app.py --server.enableCORS false --server.enableXsrfProtection false
+exec streamlit run /app/app.py --server.enableCORS false --server.enableXsrfProtection false

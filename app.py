@@ -45,6 +45,8 @@ main_menu = option_menu(None, ["Home", "Results"],
     icons=['house', 'cloud-upload'], 
     menu_icon="cast", default_index=0, orientation="horizontal")
 
+base_path = '/iplant/home/michellito/'
+
 leaf_cfg = get_cfg()
 leaf_cfg.MODEL.DEVICE='cpu'
 leaf_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
@@ -56,7 +58,7 @@ leaf_cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
 leaf_cfg.SOLVER.MAX_ITER = 1000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
 leaf_cfg.SOLVER.STEPS = []        # do not decay learning rate
 leaf_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (qrcode). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
-leaf_cfg.MODEL.WEIGHTS = "/models/leaf_model.pth"  # path to the model we just trained
+leaf_cfg.MODEL.WEIGHTS = base_path + "models/leaf_model.pth"  # path to the model we just trained
 leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7   # set a custom testing threshold
 
 os.makedirs(leaf_cfg.OUTPUT_DIR, exist_ok=True)
@@ -84,8 +86,8 @@ leaf_predictor = DefaultPredictor(leaf_cfg)
 leaf_metadata = Metadata()
 leaf_metadata.set(thing_classes = ['leaf'])
 
-if not os.path.isdir('/results'):
-    os.mkdir('/results') 
+if not os.path.isdir(base_path + 'results'):
+    os.mkdir(base_path + 'results') 
 
 
 # sidebar
@@ -200,9 +202,9 @@ def run_inference(batch):
         result_image = Image.fromarray(result_arr)
 
         if qr_result_decoded:
-            save_path = Path("/results/" + qr_result_decoded + "-result.jpg")
+            save_path = Path(base_path + "results/" + qr_result_decoded + "-result.jpg")
         else:
-            save_path = Path("/results/result.jpg")
+            save_path = Path(base_path + "results/result.jpg")
 
         result_image.save(save_path)
 
@@ -215,7 +217,7 @@ elif main_menu =="Results":
     file_names = []
     dirs = []
 
-    for root, dirs, files in os.walk("/results"):
+    for root, dirs, files in os.walk(base_path + "results"):
         for file in files:
                 filename=os.path.join(root, file)
                 file_names.append(filename)
@@ -255,7 +257,7 @@ elif main_menu =='Home':
     file_names = []
     dirs = []
 
-    for root, dirs, files in os.walk("/data"):
+    for root, dirs, files in os.walk(base_path + "data"):
         for file in files:
                 filename=os.path.join(root, file)
                 file_names.append(filename)
