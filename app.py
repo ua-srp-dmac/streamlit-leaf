@@ -35,6 +35,7 @@ from pyzbar.pyzbar import decode
 from pyzbar.pyzbar import ZBarSymbol
 
 from torchvision import transforms
+import sys
 
 
 DEMO_IMAGE = '250-8.JPG'
@@ -45,7 +46,7 @@ main_menu = option_menu(None, ["Home", "Results"],
     icons=['house', 'cloud-upload'], 
     menu_icon="cast", default_index=0, orientation="horizontal")
 
-base_path = '/iplant/home/michellito/'
+base_path = sys.argv[1]
 
 leaf_cfg = get_cfg()
 leaf_cfg.MODEL.DEVICE='cpu'
