@@ -16,8 +16,4 @@ done
 
 echo "$streamlit_path"
 
-ls /
-ls /data-store/iplant
-
-
-exec streamlit run /app/app.py $streamlit_path --server.enableCORS false --server.enableXsrfProtection false
+exec streamlit run /app/🏠_Home.py $streamlit_path --server.enableCORS false --server.enableXsrfProtection false

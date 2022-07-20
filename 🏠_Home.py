@@ -42,11 +42,9 @@ DEMO_IMAGE = '250-8.JPG'
 
 st.title('Leaf Segmentation')
 
-main_menu = option_menu(None, ["Home", "Results"], 
-    icons=['house', 'cloud-upload'], 
-    menu_icon="cast", default_index=0, orientation="horizontal")
-
+# get base data path from user input
 base_path = sys.argv[1]
+
 
 leaf_cfg = get_cfg()
 leaf_cfg.MODEL.DEVICE='cpu'
@@ -62,7 +60,6 @@ leaf_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (qrcode). (see ht
 leaf_cfg.MODEL.WEIGHTS = base_path + "models/leaf_model.pth"  # path to the model we just trained
 leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7   # set a custom testing threshold
 
-os.makedirs(leaf_cfg.OUTPUT_DIR, exist_ok=True)
 
 leaf_predictor = DefaultPredictor(leaf_cfg)
 
@@ -91,36 +88,6 @@ if not os.path.isdir(base_path + 'results'):
     os.mkdir(base_path + 'results') 
 
 
-# sidebar
-# st.markdown(
-#     """
-#     <style>
-#     [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
-#         width: 350px;
-#     }
-#     [data-testid="stSidebar"][aria-expanded="false"] > div:first-child {
-#         width: 350px;
-#         margin-left: -350px;
-#     }
-#     </style>
-#     """,
-#     unsafe_allow_html=True,
-# )
-
-# st.sidebar.title('Leaf Segmentation')
-# st.sidebar.subheader('Parameters')
-
-def get_dirs_inside_dir(folder):
-    return [my_dir for my_dir in list(map(lambda x:os.path.basename(x), sorted(Path(folder).iterdir(), key=os.path.getmtime, reverse=True))) if os.path.isdir(os.path.join(folder, my_dir))
-            and my_dir != '__pycache__' and my_dir != '.ipynb_checkpoints' and my_dir != 'API']
-
-def list_folders_in_folder(folder):
-    return [file for file in os.listdir(folder) if os.path.isdir(os.path.join(folder, file))]
-
-def show_dir_tree(folder):
-    with st.expander(f"Show {os.path.basename(folder)} folder tree"):
-        for line in tree(Path.home() / folder):
-            st.write(line)
 
 @st.cache()
 def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
@@ -208,99 +175,54 @@ def run_inference(batch):
             save_path = Path(base_path + "results/result.jpg")
 
         result_image.save(save_path)
-
-
-if main_menu =='About':
-    st.markdown('In this application we are using **MediaPipe** for creating a Face Mesh. **StreamLit** is to create the Web Graphical User Interface (GUI) ')
-
-elif main_menu =="Results":
-
-    file_names = []
-    dirs = []
-
-    for root, dirs, files in os.walk(base_path + "results"):
-        for file in files:
-                filename=os.path.join(root, file)
-                file_names.append(filename)
-
-    df = pd.DataFrame({'File Name' : file_names})
-
-    gd = GridOptionsBuilder.from_dataframe(df)
-    gd.configure_pagination(enabled=True)
-    gd.configure_selection(selection_mode="single", use_checkbox=True)
-    gd.configure_column("File Name", headerCheckboxSelection = True)
-
-    file_table = AgGrid(df, fit_columns_on_grid_load=True, gridOptions=gd.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
-
-    visualize = st.button('Visualize')
     
-    if visualize:
 
-        selected_result = file_table["selected_rows"]
-        file_name = selected_result[0]['File Name']
+file_names = []
+dirs = []
 
-        image = Image.open(file_name)
-        # leaf_count = len(pred_boxes)
-        # # kpi1_text.write(f"<h1 style='text-align: center; color: red;'>{leaf_count}</h1>", unsafe_allow_html=True)
-        st.subheader('Output Image')
-        st.image(image)
+for root, dirs, files in os.walk(base_path + "data"):
+    for file in files:
+            filename=os.path.join(root, file)
+            file_names.append(filename)
+
+df = pd.DataFrame({'File Name' : file_names})
+
+gd = GridOptionsBuilder.from_dataframe(df)
+gd.configure_pagination(enabled=True)
+gd.configure_selection(selection_mode="single", use_checkbox=True)
+gd.configure_column("File Name", headerCheckboxSelection = True)
+
+file_table = AgGrid(df, fit_columns_on_grid_load=True, gridOptions=gd.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
+
+# st.sidebar.text('Original Image')
+# st.sidebar.image(image)
+run = st.button('Run')
+
+if run:
+
+    # set up batch
+    selected_rows = file_table["selected_rows"]
+    print(selected_rows)
+    batch = []
+
+    convert_tensor = transforms.ToTensor()
     
-        # st.markdown("**Detected Leaves**")
-        # kpi1_text = st.markdown("0")
-        # st.markdown('---')
-   
-
-elif main_menu == 'Upload':
-    img_file_buffer = st.file_uploader("Upload an image", type=[ "jpg", "jpeg",'png'])
-
-elif main_menu =='Home':
-
-    file_names = []
-    dirs = []
-
-    for root, dirs, files in os.walk(base_path + "data"):
-        for file in files:
-                filename=os.path.join(root, file)
-                file_names.append(filename)
-
-    df = pd.DataFrame({'File Name' : file_names})
-
-    gd = GridOptionsBuilder.from_dataframe(df)
-    gd.configure_pagination(enabled=True)
-    gd.configure_selection(selection_mode="single", use_checkbox=True)
-    gd.configure_column("File Name", headerCheckboxSelection = True)
-
-    file_table = AgGrid(df, fit_columns_on_grid_load=True, gridOptions=gd.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
-
-    # st.sidebar.text('Original Image')
-    # st.sidebar.image(image)
-    run = st.button('Run')
+    for row in selected_rows:
+        image = Image.open(row["File Name"])
+        batch.append({"image": np.array(image)})
     
-    if run:
+    run_inference(batch)
 
-        # set up batch
-        selected_rows = file_table["selected_rows"]
-        print(selected_rows)
-        batch = []
+    # main_menu = "Results"
 
-        convert_tensor = transforms.ToTensor()
-        
-        for row in selected_rows:
-            image = Image.open(row["File Name"])
-            batch.append({"image": np.array(image)})
-        
-        run_inference(batch)
+    # leaf_count = 0
 
-        # main_menu = "Results"
+    # if img_file_buffer is not None:
+    #     image = np.array(Image.open(img_file_buffer))
 
-        # leaf_count = 0
-
-        # if img_file_buffer is not None:
-        #     image = np.array(Image.open(img_file_buffer))
-
-        # else:
-        #     demo_image = DEMO_IMAGE
-        #     image = np.array(Image.open(demo_image))
+    # else:
+    #     demo_image = DEMO_IMAGE
+    #     image = np.array(Image.open(demo_image))
     
 
 
