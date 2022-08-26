@@ -35,14 +35,13 @@ visualize = st.button('Visualize')
 if visualize:
 
     selected_result = file_table["selected_rows"]
-    file_name = selected_result[0]['File Name']
+    file_path = selected_result[0]['File Name']
+    
+    # get file_name without extension
+    file_name = file_path.split('/')[-1]
 
-    image = Image.open(file_name)
-    # leaf_count = len(pred_boxes)
-    # # kpi1_text.write(f"<h1 style='text-align: center; color: red;'>{leaf_count}</h1>", unsafe_allow_html=True)
+    image = Image.open(file_path)
+
     st.subheader('Output Image')
+    st.text(file_name)
     st.image(image)
-
-    # st.markdown("**Detected Leaves**")
-    # kpi1_text = st.markdown("0")
-    # st.markdown('---')
