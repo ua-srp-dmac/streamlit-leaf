@@ -97,41 +97,51 @@ def run_inference(batch):
 
     for index, image in enumerate(batch):
 
-        leaf_outputs = leaf_predictor(image["image"])
-        # print(leaf_outputs)
-        pred_boxes = leaf_outputs["instances"].pred_boxes
-        print("Found " + str(len(pred_boxes)) + " leaves")
+        # run interence on selected image
+        outputs = leaf_predictor(image["image"])
 
-        print(pred_boxes)
+        # get bboxes and class labels
+        pred_boxes = outputs["instances"].pred_boxes.tensor.numpy()
+        class_labels = outputs["instances"].pred_classes.numpy()
+
+        qr_indices = []
+        leaf_indices = []
+
+        # get indices of leaves and qr codes
+        for label, i in enumerate(class_labels):
+            if label == 0: # leaf
+                leaf_indices.append(i)
+            elif label == 1: # qr
+                qr_indices.append(i)
+
 
         qr_result_decoded = None
+        
+        # if qr code was detected, decode
+        if len(qr_indices):
 
-        # qr_bbox = pred_boxes.tensor.numpy()
+            # get first qr code
+            bbox = pred_boxes[qr_indices[0]]
 
-        # print(qr_bbox)
+            # (x0, y0, x1, y1)
+            x0 = round(bbox[0].item())
+            y0 = round(bbox[1].item())
+            x1 = round(bbox[2].item())
+            y1 = round(bbox[3].item())
 
-        # if len(qr_bbox):
+            # crop to bounding box for QR decoding
+            crop_img = image["image"][ y0:y1, x0:x1]
 
-        #     bbox = qr_bbox[0]
+            # decode QR code
+            qr_result = decode(crop_img, symbols=[ZBarSymbol.QRCODE])
+            print(qr_result[0].data )
+            qr_result_decoded = qr_result[0].data.decode("utf-8") 
 
-        #     # (x0, y0, x1, y1)
-
-        #     x0 = round(bbox[0].item())
-        #     y0 = round(bbox[1].item())
-        #     x1 = round(bbox[2].item())
-        #     y1 = round(bbox[3].item())
-
-        #     crop_img = image["image"][ y0:y1, x0:x1]
-
-        #     # zbar
-        #     qr_result = decode(crop_img, symbols=[ZBarSymbol.QRCODE])
-        #     print(qr_result[0].data )
-        #     qr_result_decoded = qr_result[0].data.decode("utf-8") 
-
+        # set up results visualizer
         v = Visualizer(image["image"][:, :, ::-1],
             metadata=leaf_metadata, 
             scale=0.5, 
-            instance_mode=ColorMode.IMAGE_BW   # remove the colors of unsegmented pixels. This option is only available for segmentation models
+            instance_mode=ColorMode.SEGMENTATION
         )
 
         out = v.draw_instance_predictions(leaf_outputs["instances"].to("cpu"))
