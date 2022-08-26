@@ -83,11 +83,6 @@ def run_inference(batch):
             elif label == 1: # qr
                 qr_indices.append(i)
 
-        print('qr_indices')
-        print(qr_indices)
-        print('leaf_indices')
-        print(leaf_indices)
-
         qr_result_decoded = None
         
         # if qr code was detected, decode
@@ -123,9 +118,9 @@ def run_inference(batch):
 
         # if QR was decoded, name results file w/ plant ID
         if qr_result_decoded:
-            save_path = Path(base_path + "results/" + qr_result_decoded + "-result.jpg")
+            save_path = Path(base_path + "results/" + image['date'] + '_' + qr_result_decoded + "-result.jpg")
         else:
-            save_path = Path(base_path + "results/" + image['file_name'] + "-result.jpg")
+            save_path = Path(base_path + "results/" + image['date'] + '_' + image['file_name'] + "-result.jpg")
 
         result_image.save(save_path)
     
@@ -158,9 +153,26 @@ if run:
     for row in selected_rows:
         file_path = row["File Name"]
         image = Image.open(file_path)
+
+        # get file_name without extension
         file_name = file_path.split('/')[-1].split('.')[0]
-        print(file_name)
-        batch.append({"image": np.array(image), "file_name": file_name})
+        
+        # get DateTime from exif data
+        exifdata = image.getexif()
+        img_date = ''
+
+        for tag_id in exifdata:
+            
+            # get the tag name, instead of human unreadable tag id
+            tag = TAGS.get(tag_id, tag_id)
+            data = exifdata.get(tag_id)
+
+            if tag == 'DateTime': 
+                img_date = data
+        
+        date = img_date.split(' ')[0].replace(':', '-')
+
+        batch.append({"image": np.array(image), "file_name": file_name, "date": date })
     
     run_inference(batch)
 
