@@ -10,6 +10,7 @@ from detectron2.config import get_cfg
 from detectron2.utils.visualizer import Visualizer, ColorMode
 
 import os
+import sys
 import cv2
 import numpy as np
 import pandas as pd
@@ -25,30 +26,30 @@ import streamlit as st
 from st_aggrid import AgGrid, GridUpdateMode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 
-import sys
-
-st.title('Leaf Segmentation')
-st.header('Files')
 
 # get base data path from user input
 base_path = sys.argv[1]
 
-leaf_cfg = get_cfg()
-leaf_cfg.MODEL.DEVICE='cpu'
-leaf_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
-leaf_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3 
-leaf_cfg.MODEL.WEIGHTS = base_path + "models/leaf_qr_model.pth" # path to the model we just trained
-leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7  # set a custom testing threshold
-
-leaf_predictor = DefaultPredictor(leaf_cfg)
-
-leaf_metadata = Metadata()
-leaf_metadata.set(thing_classes = ['leaf', 'qr', 'red-square'])
-
+# if results path doesn't exist, create it
 if not os.path.isdir(base_path + 'results'):
     os.mkdir(base_path + 'results') 
 
 
+# --------------- SETUP MODEL WITH TRAINED WEIGHTS ----------------#
+leaf_cfg = get_cfg()
+leaf_cfg.MODEL.DEVICE='cpu'
+leaf_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
+leaf_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3 
+leaf_cfg.MODEL.WEIGHTS = base_path + "models/leaf_qr_model.pth" # path to trained weights
+leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7  # set a custom testing threshold
+
+leaf_predictor = DefaultPredictor(leaf_cfg)
+
+# set up metadata
+leaf_metadata = Metadata()
+leaf_metadata.set(thing_classes = ['leaf', 'qr', 'red-square'])
+
+# --------------- START RUN INFERENCE FUNCTION ----------------#
 @st.cache()
 def run_inference(batch):
 
@@ -63,12 +64,9 @@ def run_inference(batch):
 
         qr_indices = []
         leaf_indices = []
-
-        print(class_labels)
         
         # get indices of leaves and qr codes
         for i, label in enumerate(class_labels):
-            print(label)
             if label == 0: # leaf
                 leaf_indices.append(i)
             elif label == 1: # qr
@@ -114,23 +112,29 @@ def run_inference(batch):
             save_path = Path(base_path + "results/" + image['date'] + '_' + image['file_name'] + "-result.jpg")
 
         result_image.save(save_path)
-    
 
+#--------------------- STREAMLIT INTERFACE ----------------------#
+
+st.title('Leaf Segmentation')
+st.header('Files')
+
+# walk through directory to display files in table
 file_names = []
 dirs = []
 
 for root, dirs, files in os.walk(base_path + "data"):
     for file in files:
-            filename=os.path.join(root, file)
-            file_names.append(filename)
+        filename=os.path.join(root, file)
+        file_names.append(filename)
 
+# set up AgGrid
 df = pd.DataFrame({'File Name' : file_names})
-
 gd = GridOptionsBuilder.from_dataframe(df)
 gd.configure_pagination(enabled=True)
 gd.configure_selection(selection_mode="single", use_checkbox=True)
 gd.configure_column("File Name", headerCheckboxSelection = True)
 
+# display AgGrid
 file_table = AgGrid(df, fit_columns_on_grid_load=True, gridOptions=gd.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
 
 run = st.button('Run')
