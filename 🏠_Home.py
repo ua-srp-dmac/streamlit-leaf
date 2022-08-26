@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 import pandas as pd
 from PIL import Image
+from PIL.ExifTags import TAGS
 from pathlib import Path
 from pyzbar.pyzbar import decode
 from pyzbar.pyzbar import ZBarSymbol
@@ -57,43 +58,8 @@ if not os.path.isdir(base_path + 'results'):
     os.mkdir(base_path + 'results') 
 
 
-
-@st.cache()
-def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
-    # initialize the dimensions of the image to be resized and
-    # grab the image size
-    dim = None
-    (h, w) = image.shape[:2]
-
-    # if both the width and height are None, then return the
-    # original image
-    if width is None and height is None:
-        return image
-
-    # check to see if the width is None
-    if width is None:
-        # calculate the ratio of the height and construct the
-        # dimensions
-        r = height / float(h)
-        dim = (int(w * r), height)
-
-    # otherwise, the height is None
-    else:
-        # calculate the ratio of the width and construct the
-        # dimensions
-        r = width / float(w)
-        dim = (width, int(h * r))
-
-    # resize the image
-    resized = cv2.resize(image, dim, interpolation=inter)
-
-    # return the resized image
-    return resized
-
 @st.cache()
 def run_inference(batch):
-
-    print(batch)
 
     for index, image in enumerate(batch):
 
@@ -107,13 +73,20 @@ def run_inference(batch):
         qr_indices = []
         leaf_indices = []
 
+        print(class_labels)
+        
         # get indices of leaves and qr codes
-        for label, i in enumerate(class_labels):
+        for i, label in enumerate(class_labels):
+            print(label)
             if label == 0: # leaf
                 leaf_indices.append(i)
             elif label == 1: # qr
                 qr_indices.append(i)
 
+        print('qr_indices')
+        print(qr_indices)
+        print('leaf_indices')
+        print(leaf_indices)
 
         qr_result_decoded = None
         
@@ -134,7 +107,7 @@ def run_inference(batch):
 
             # decode QR code
             qr_result = decode(crop_img, symbols=[ZBarSymbol.QRCODE])
-            print(qr_result[0].data )
+            print(qr_result[0].data)
             qr_result_decoded = qr_result[0].data.decode("utf-8") 
 
         # set up results visualizer
@@ -144,14 +117,15 @@ def run_inference(batch):
             instance_mode=ColorMode.SEGMENTATION
         )
 
-        out = v.draw_instance_predictions(leaf_outputs["instances"].to("cpu"))
+        out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
         result_arr = out.get_image()[:, :, ::-1]
         result_image = Image.fromarray(result_arr)
 
+        # if QR was decoded, name results file w/ plant ID
         if qr_result_decoded:
             save_path = Path(base_path + "results/" + qr_result_decoded + "-result.jpg")
         else:
-            save_path = Path(base_path + "results/result.jpg")
+            save_path = Path(base_path + "results/" + image['file_name'] + "-result.jpg")
 
         result_image.save(save_path)
     
@@ -179,14 +153,14 @@ if run:
 
     # set up batch
     selected_rows = file_table["selected_rows"]
-    print(selected_rows)
     batch = []
-
-    convert_tensor = transforms.ToTensor()
     
     for row in selected_rows:
-        image = Image.open(row["File Name"])
-        batch.append({"image": np.array(image)})
+        file_path = row["File Name"]
+        image = Image.open(file_path)
+        file_name = file_path.split('/')[-1].split('.')[0]
+        print(file_name)
+        batch.append({"image": np.array(image), "file_name": file_name})
     
     run_inference(batch)
 
