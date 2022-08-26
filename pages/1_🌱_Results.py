@@ -15,8 +15,8 @@ dirs = []
 
 for root, dirs, files in os.walk(base_path + "results"):
     for file in files:
-            filename=os.path.join(root, file)
-            file_names.append(filename)
+        filename=os.path.join(root, file)
+        file_names.append(filename)
 
 df = pd.DataFrame({'File Name' : file_names})
 
@@ -24,6 +24,9 @@ gd = GridOptionsBuilder.from_dataframe(df)
 gd.configure_pagination(enabled=True)
 gd.configure_selection(selection_mode="single", use_checkbox=True)
 gd.configure_column("File Name", headerCheckboxSelection = True)
+
+st.title('Leaf Segmentation')
+st.header('Results')
 
 file_table = AgGrid(df, fit_columns_on_grid_load=True, gridOptions=gd.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
 

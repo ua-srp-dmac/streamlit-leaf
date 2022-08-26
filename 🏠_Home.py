@@ -27,8 +27,8 @@ from st_aggrid.grid_options_builder import GridOptionsBuilder
 
 import sys
 
-
 st.title('Leaf Segmentation')
+st.header('Files')
 
 # get base data path from user input
 base_path = sys.argv[1]
@@ -36,20 +36,11 @@ base_path = sys.argv[1]
 leaf_cfg = get_cfg()
 leaf_cfg.MODEL.DEVICE='cpu'
 leaf_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
-leaf_cfg.DATASETS.TEST = ()
-leaf_cfg.DATALOADER.NUM_WORKERS = 2
-leaf_cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")  # Let training initialize from model zoo
-leaf_cfg.SOLVER.IMS_PER_BATCH = 2
-leaf_cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
-leaf_cfg.SOLVER.MAX_ITER = 1000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
-leaf_cfg.SOLVER.STEPS = []        # do not decay learning rate
-leaf_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3  # only has one class (qrcode). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
-leaf_cfg.MODEL.WEIGHTS = base_path + "models/leaf_qr_model.pth"  # path to the model we just trained
-leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7   # set a custom testing threshold
-
+leaf_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3 
+leaf_cfg.MODEL.WEIGHTS = base_path + "models/leaf_qr_model.pth" # path to the model we just trained
+leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7  # set a custom testing threshold
 
 leaf_predictor = DefaultPredictor(leaf_cfg)
-
 
 leaf_metadata = Metadata()
 leaf_metadata.set(thing_classes = ['leaf', 'qr', 'red-square'])
