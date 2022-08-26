@@ -91,8 +91,9 @@ def run_inference(batch):
 
             # decode QR code
             qr_result = decode(crop_img, symbols=[ZBarSymbol.QRCODE])
-            print(qr_result[0].data)
-            qr_result_decoded = qr_result[0].data.decode("utf-8") 
+
+            if len(qr_result):
+                qr_result_decoded = qr_result[0].data.decode("utf-8") 
 
         # set up results visualizer
         v = Visualizer(image["image"][:, :, ::-1],
