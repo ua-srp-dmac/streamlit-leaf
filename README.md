@@ -22,7 +22,7 @@ $ git clone git@github.com:michellito/streamlit-leaf.git
 
 Then, populate your folders with these example data/models stored on [CyVerse here](https://de.cyverse.org/data/ds/iplant/home/shared/srp_dmac/dmac/rhizobox?selectedOrder=asc&selectedOrderBy=name&selectedPage=0&selectedRowsPerPage=100). You'll need to create a CyVerse account with an .edu email and request access to view the folder.  Please refer to [Transferring Data with Cyberduck](https://learning.cyverse.org/ds/cyberduck/) to download data from CyVerse.
 
-Once you have your folders populated, you can build and run the docker container from the `streamlit-leaf` directory.
+Once you have your folders populated, you can build and run the docker container from the `streamlit-leaf` directory. You'll need to replace `<your-dockerhub-username>` with your own username and replace the `/path/to/data` and `path/to/models` with the full path to the data/models folders that you just created.
 
 ```
 $ cd streamlit-leaf
