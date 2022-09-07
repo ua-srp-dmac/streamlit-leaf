@@ -153,37 +153,28 @@ gdm.configure_selection(selection_mode="single", use_checkbox=True)
 gdm.configure_column("Models", headerCheckboxSelection = True)
 model_table = AgGrid(df2,fit_columns_on_grid_load=True, gridOptions=gdm.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
 
+
+
 path = "/cyverse/data"
 dir = []
+file_name = []
+
+os.walk(path)
+file_name = [x[0] for x in os.walk(path)]
+
+option = st.selectbox('Select Directory', file_name, index = len(file_name) - 1)
+
+st.write('Files in: ', option)
+
 file_names = []
 
-files = os.listdir(path) 
-for i in files:
-    if os.path.isdir(i):
-        file_names.append(i)
-option = st.selectbox('Select Directory', file_names)
+file_names = (file for file in os.listdir(option) 
+         if os.path.isfile(os.path.join(option, file)))
 
-    
-    
-extensions= st.text_input("Enter the File Extension (Seperated with comma):").split(",")
-
-if path and extensions:
-  file_names = []
-  file_names_ext = []
-  dirs = []
-  for dp, dn, filenames in os.walk(path):
-    for fn in filenames:
-      for ext in extensions:
-        if ext in fn:
-          dirs.append(dp)
-          file_names.append(os.path.join(dp, fn))
-          file_names_ext.append(ext)
-          break
-
-  df3 = pd.DataFrame({'Directory': dirs, 'File_Name' : file_names, 'Term': file_names_ext})
-  gds = GridOptionsBuilder.from_dataframe(df3)
-  gds.configure_selection(selection_mode="single", use_checkbox=True)
-  AgGrid(df3, fit_columns_on_grid_load=True, gridOptions = gds.build(), update_mode = GridUpdateMode.SELECTION_CHANGED)
+df3 = pd.DataFrame({'File_Name' : file_names})
+gds = GridOptionsBuilder.from_dataframe(df3)
+gds.configure_selection(selection_mode="single", use_checkbox=True)
+AgGrid(df3, fit_columns_on_grid_load=True, gridOptions = gds.build(), update_mode = GridUpdateMode.SELECTION_CHANGED)
 
   
 run = st.button('Run')
