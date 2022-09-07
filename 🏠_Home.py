@@ -154,7 +154,7 @@ gdm.configure_column("Models", headerCheckboxSelection = True)
 model_table = AgGrid(df2,fit_columns_on_grid_load=True, gridOptions=gdm.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
 
 
-
+st.header('File Search')
 path = "/cyverse/data"
 dir = []
 file_name = []
@@ -162,7 +162,7 @@ file_name = []
 os.walk(path)
 file_name = [x[0] for x in os.walk(path)]
 
-option = st.selectbox('Select Directory', file_name, index = len(file_name) - 1)
+option = st.selectbox('Select Directory', file_name, index = 0)
 
 st.write('Files in: ', option)
 
