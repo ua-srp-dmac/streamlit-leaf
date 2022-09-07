@@ -23,6 +23,7 @@ from torchvision import transforms
 
 import streamlit as st
 
+
 from st_aggrid import AgGrid, GridUpdateMode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 
@@ -137,7 +138,54 @@ gd.configure_column("File Name", headerCheckboxSelection = True)
 
 # display AgGrid
 file_table = AgGrid(df, fit_columns_on_grid_load=True, gridOptions=gd.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
+st.header('Models')
 
+models = []
+for root, dirs, files in os.walk(base_path + "models"):
+    for model in files:
+        model = os.path.join(root, file)
+        models.append(model)
+
+df2 = pd.DataFrame({'Models' : models})
+gdm = GridOptionsBuilder.from_dataframe(df2)
+gdm.configure_pagination(enabled=True)
+gdm.configure_selection(selection_mode="single", use_checkbox=True)
+gdm.configure_column("Models", headerCheckboxSelection = True)
+model_table = AgGrid(df2,fit_columns_on_grid_load=True, gridOptions=gdm.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
+
+path = "/cyverse/data"
+dir = []
+file_names = []
+
+files = os.listdir(path) 
+for i in files:
+    if os.path.isdir(i):
+        file_names.append(i)
+option = st.selectbox('Select Directory', file_names)
+
+    
+    
+extensions= st.text_input("Enter the File Extension (Seperated with comma):").split(",")
+
+if path and extensions:
+  file_names = []
+  file_names_ext = []
+  dirs = []
+  for dp, dn, filenames in os.walk(path):
+    for fn in filenames:
+      for ext in extensions:
+        if ext in fn:
+          dirs.append(dp)
+          file_names.append(os.path.join(dp, fn))
+          file_names_ext.append(ext)
+          break
+
+  df3 = pd.DataFrame({'Directory': dirs, 'File_Name' : file_names, 'Term': file_names_ext})
+  gds = GridOptionsBuilder.from_dataframe(df3)
+  gds.configure_selection(selection_mode="single", use_checkbox=True)
+  AgGrid(df3, fit_columns_on_grid_load=True, gridOptions = gds.build(), update_mode = GridUpdateMode.SELECTION_CHANGED)
+
+  
 run = st.button('Run')
 
 if run:
@@ -172,7 +220,7 @@ if run:
     
     run_inference(batch)
 
-    
+
 
 
  
