@@ -95,28 +95,48 @@ def run_inference(batch):
             if len(qr_result):
                 qr_result_decoded = qr_result[0].data.decode("utf-8") 
 
-        # set up results visualizer
-        v = Visualizer(image["image"][:, :, ::-1],
-            metadata=leaf_metadata, 
-            scale=0.5, 
-            instance_mode=ColorMode.SEGMENTATION
-        )
-
-        out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-        result_arr = out.get_image()[:, :, ::-1]
-        result_image = Image.fromarray(result_arr)
+        new_file_name = None
 
         # if QR was decoded, name results file w/ plant ID
         if qr_result_decoded:
-            save_path = Path(base_path + "results/" + image['date'] + '_' + qr_result_decoded + "-result.jpg")
+            new_file_name = image['date'] + '_' + qr_result_decoded
         else:
-            save_path = Path(base_path + "results/" + image['date'] + '_' + image['file_name'] + "-result.jpg")
+            new_file_name = image['date'] + '_' + image['file_name']
 
-        result_image.save(save_path)
+        if rename_files_option:
+
+            print('rename files option')
+            image_dir = image['file_path'].split('/')[:-1]
+            new_file_path = '/'.join(image_dir)
+            new_file_path = new_file_path + '/' + new_file_name + '.jpg'
+
+            os.rename(image['file_path'], new_file_path)
+
+        if run_model_option: 
+            # set up results visualizer
+            v = Visualizer(image["image"][:, :, ::-1],
+                metadata=leaf_metadata, 
+                scale=0.5, 
+                instance_mode=ColorMode.SEGMENTATION
+            )
+
+            out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+            result_arr = out.get_image()[:, :, ::-1]
+            result_image = Image.fromarray(result_arr)
+
+            save_path = Path(base_path + "results/" + new_file_name + "-result.jpg")
+
+            result_image.save(save_path)
 
 #--------------------- STREAMLIT INTERFACE ----------------------#
 
 st.title('Leaf Segmentation')
+
+st.header('Options')
+
+rename_files_option = st.checkbox('Rename files')
+run_model_option = st.checkbox('Run Leaf Segmentation Model')
+
 st.header('Files')
 
 # walk through directory to display files in table
@@ -143,11 +163,11 @@ run = st.button('Run')
 if run:
 
     # set up batch
-    selected_rows = file_table["selected_rows"]
+    selected_rows = file_table['selected_rows']
     batch = []
     
     for row in selected_rows:
-        file_path = row["File Name"]
+        file_path = row['File Name']
         image = Image.open(file_path)
 
         # get file_name without extension
@@ -168,7 +188,12 @@ if run:
         
         date = img_date.split(' ')[0].replace(':', '-')
 
-        batch.append({"image": np.array(image), "file_name": file_name, "date": date })
+        batch.append({
+            'image': np.array(image),
+            'file_name': file_name,
+            'file_path': file_path,
+            'date': date
+        })
     
     run_inference(batch)
 
