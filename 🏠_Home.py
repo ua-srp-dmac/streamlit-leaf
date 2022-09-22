@@ -119,6 +119,25 @@ def run_inference(batch):
 st.title('Leaf Segmentation')
 st.header('Files')
 
+option = st.selectbox(
+    'ML Model Selection',
+    ('leaf_model.pth','leaf_qr_model.pth','qr_model.pth')
+)
+
+if option == 'leaf_model.pth':
+    leaf_cfg.MODEL.WEIGHTS = base_path + "models/leaf_model.pth"
+    leaf_predictor = DefaultPredictor(leaf_cfg)
+
+if option == 'leaf_qr_model.pth':
+    leaf_cfg.MODEL.WEIGHTS = base_path + "models/leaf_qr_model.pth"
+    leaf_predictor = DefaultPredictor(leaf_cfg)
+
+if option == 'qr_model.pth':
+    leaf_cfg.MODEL.WEIGHTS = base_path + "models/qr_model.pth"
+    leaf_predictor = DefaultPredictor(leaf_cfg)
+
+
+
 # walk through directory to display files in table
 file_names = []
 dirs = []
