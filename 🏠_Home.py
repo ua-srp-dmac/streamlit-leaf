@@ -27,27 +27,36 @@ from st_aggrid import AgGrid, GridUpdateMode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 
 
-# get base data path from user input
-base_path = sys.argv[1]
 
-# if results path doesn't exist, create it
-if not os.path.isdir(base_path + 'results'):
-    os.mkdir(base_path + 'results') 
+@st.cache()
+def setup():
+    # get base data path from user input
+    base_path = sys.argv[1]
+
+    # if results path doesn't exist, create it
+    if not os.path.isdir(base_path + 'results'):
+        os.mkdir(base_path + 'results') 
+
+    return base_path
 
 
 # --------------- SETUP MODEL WITH TRAINED WEIGHTS ----------------#
-leaf_cfg = get_cfg()
-leaf_cfg.MODEL.DEVICE='cpu'
-leaf_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
-leaf_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3 
-leaf_cfg.MODEL.WEIGHTS = base_path + "models/leaf_qr_model.pth" # path to trained weights
-leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7  # set a custom testing threshold
+@st.cache()
+def setup_model(base_path):
+    leaf_cfg = get_cfg()
+    leaf_cfg.MODEL.DEVICE='cpu'
+    leaf_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
+    leaf_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3 
+    leaf_cfg.MODEL.WEIGHTS = base_path + "models/leaf_qr_model.pth" # path to trained weights
+    leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7  # set a custom testing threshold
 
-leaf_predictor = DefaultPredictor(leaf_cfg)
+    leaf_predictor = DefaultPredictor(leaf_cfg)
 
-# set up metadata
-leaf_metadata = Metadata()
-leaf_metadata.set(thing_classes = ['leaf', 'qr', 'red-square'])
+    # set up metadata
+    leaf_metadata = Metadata()
+    leaf_metadata.set(thing_classes = ['leaf', 'qr', 'red-square'])
+
+    return (leaf_predictor, leaf_metadata)
 
 # --------------- START RUN INFERENCE FUNCTION ----------------#
 @st.cache()
@@ -129,6 +138,10 @@ def run_inference(batch):
             result_image.save(save_path)
 
 #--------------------- STREAMLIT INTERFACE ----------------------#
+
+base_path = setup()
+print(base_path)
+leaf_predictor, leaf_metadata = setup_model(base_path)
 
 st.title('Leaf Segmentation')
 
