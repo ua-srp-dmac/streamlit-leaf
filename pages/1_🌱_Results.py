@@ -13,7 +13,7 @@ base_path = sys.argv[1]
 file_names = []
 dirs = []
 
-for root, dirs, files in os.walk(base_path + "results"):
+for root, dirs, files in os.walk(base_path + 'results'):
     for file in files:
         filename=os.path.join(root, file)
         file_names.append(filename)
@@ -22,8 +22,8 @@ df = pd.DataFrame({'File Name' : file_names})
 
 gd = GridOptionsBuilder.from_dataframe(df)
 gd.configure_pagination(enabled=True)
-gd.configure_selection(selection_mode="single", use_checkbox=True)
-gd.configure_column("File Name", headerCheckboxSelection = True)
+gd.configure_selection(selection_mode='single', use_checkbox=True)
+gd.configure_column('File Name', headerCheckboxSelection = True)
 
 st.title('Leaf Segmentation')
 st.header('Results')
@@ -34,7 +34,7 @@ visualize = st.button('Visualize')
 
 if visualize:
 
-    selected_result = file_table["selected_rows"]
+    selected_result = file_table['selected_rows']
     file_path = selected_result[0]['File Name']
     
     # get file_name without extension

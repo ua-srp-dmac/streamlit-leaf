@@ -10,8 +10,11 @@ from detectron2.config import get_cfg
 from detectron2.utils.visualizer import Visualizer, ColorMode
 
 import os
+import datetime
+import time
 import sys
 import cv2
+import base64
 import numpy as np
 import pandas as pd
 from PIL import Image
@@ -27,10 +30,50 @@ from st_aggrid import AgGrid, GridUpdateMode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 
 
+@st.cache(allow_output_mutation=True)
+def get_base64_of_bin_file(png_file):
+    with open(png_file, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+
+def build_markup_for_logo(
+    png_file,
+    background_position="50% 10%",
+    margin_top="10%",
+    image_width="70%",
+    image_height="",
+):
+    binary_string = get_base64_of_bin_file(png_file)
+    return """
+            <style>
+                [data-testid="stSidebarNav"] {
+                    background-image: url("data:image/png;base64,%s");
+                    background-repeat: no-repeat;
+                    background-position: %s;
+                    margin-top: %s;
+                    background-size: %s %s;
+                }
+            </style>
+            """ % (
+        binary_string,
+        background_position,
+        margin_top,
+        image_width,
+        image_height,
+    )
+
+
+def add_logo(png_file):
+    logo_markup = build_markup_for_logo(png_file)
+    st.markdown(
+        logo_markup,
+        unsafe_allow_html=True,
+    )
 
 @st.cache()
 def setup():
-    """ Setup model from trained weights.
+    """ App setup that needs to run once at initialization.
     """
     # get base data path from user input
     base_path = sys.argv[1]
@@ -42,17 +85,27 @@ def setup():
     return base_path
 
 
-
 @st.cache()
 def setup_model(base_path):
     """ Setup model and metadata from trained weights.
     """
+
     leaf_cfg = get_cfg()
+
     leaf_cfg.MODEL.DEVICE='cpu'
-    leaf_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
+    
+    leaf_cfg.merge_from_file(model_zoo.get_config_file(
+        'COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml'
+    ))
+
+    # set to number of classes (qr, leaf, red-square)
     leaf_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3 
-    leaf_cfg.MODEL.WEIGHTS = base_path + "models/leaf_qr_model.pth" # path to trained weights
-    leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7  # set a custom testing threshold
+    
+    # path to trained weights
+    leaf_cfg.MODEL.WEIGHTS = base_path + 'models/leaf_qr_model.pth' 
+    
+    # set a custom testing threshold
+    leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7  
 
     leaf_predictor = DefaultPredictor(leaf_cfg)
 
@@ -63,7 +116,6 @@ def setup_model(base_path):
     return (leaf_predictor, leaf_metadata)
 
 
-@st.cache()
 def run_inference(batch):
     """ Run prediction on batch of images.
     """
@@ -71,11 +123,11 @@ def run_inference(batch):
     for index, image in enumerate(batch):
 
         # run interence on selected image
-        outputs = leaf_predictor(image["image"])
+        outputs = leaf_predictor(image['image'])
 
         # get bboxes and class labels
-        pred_boxes = outputs["instances"].pred_boxes.tensor.numpy()
-        class_labels = outputs["instances"].pred_classes.numpy()
+        pred_boxes = outputs['instances'].pred_boxes.tensor.numpy()
+        class_labels = outputs['instances'].pred_classes.numpy()
 
         qr_indices = []
         leaf_indices = []
@@ -102,14 +154,19 @@ def run_inference(batch):
             y1 = round(bbox[3].item())
 
             # crop to bounding box for QR decoding
-            crop_img = image["image"][ y0:y1, x0:x1]
+            crop_img = image['image'][ y0:y1, x0:x1]
 
             # decode QR code
             qr_result = decode(crop_img, symbols=[ZBarSymbol.QRCODE])
 
             if len(qr_result):
-                qr_result_decoded = qr_result[0].data.decode("utf-8") 
+                qr_result_decoded = qr_result[0].data.decode('utf-8') 
 
+        # get directory current image is in
+        image_dir = image['file_path'].split('/')[:-1]
+        image_dir = '/'.join(image_dir)
+
+        old_file_name = image['file_path'].split('/')[-1]
         new_file_name = None
 
         # if QR was decoded, name results file w/ plant ID
@@ -120,104 +177,127 @@ def run_inference(batch):
 
         # rename original file
         if rename_files_option:
-
-            print('rename files option')
-            image_dir = image['file_path'].split('/')[:-1]
-            new_file_path = '/'.join(image_dir)
-            new_file_path = new_file_path + '/' + new_file_name + '.jpg'
-
-            os.rename(image['file_path'], new_file_path)
+ 
+            new_file_path = image_dir + '/' + new_file_name + '.JPG'
+            
+            if not old_file_name.startswith(image['date']):
+                os.rename(image['file_path'], new_file_path)
 
         # save leaf results to file
         if run_model_option: 
             # set up results visualizer
-            v = Visualizer(image["image"][:, :, ::-1],
+            v = Visualizer(image['image'][:, :, ::-1],
                 metadata=leaf_metadata, 
                 scale=0.5, 
                 instance_mode=ColorMode.SEGMENTATION
             )
 
-            out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+            out = v.draw_instance_predictions(outputs['instances'].to('cpu'))
             result_arr = out.get_image()[:, :, ::-1]
             result_image = Image.fromarray(result_arr)
 
-            save_path = Path(base_path + "results/" + new_file_name + "-result.jpg")
+            save_path = Path(base_path + 'results/' + new_file_name + '-result.JPG')
 
             result_image.save(save_path)
+        
+        progress_bar.progress((index + 2) / (len(batch) + 1))
+    
+    
 
 #--------------------- STREAMLIT INTERFACE ----------------------#
+
+add_logo('/app/images/srp-logo.png')
 
 base_path = setup()
 leaf_predictor, leaf_metadata = setup_model(base_path)
 
-st.title('Leaf Segmentation')
 
-st.header('Options')
+st.header('Leaf Segmentation App')
+st.subheader('1. Configure Options')
+st.markdown('If you\'d like to rename file according to the naming convention, select **Rename Files**.')
 
-rename_files_option = st.checkbox('Rename files')
-run_model_option = st.checkbox('Run Leaf Segmentation Model')
+rename_files_option = st.checkbox('Rename files', value=True)
+run_model_option = st.checkbox('Save segmentation results to image', value=True)
 
-st.header('Files')
+st.subheader('2. Select Files')
+st.markdown('Select the files you\'d like to analyze.')
 
 # walk through directory to display files in table
 file_names = []
+modified_dates = []
+
 dirs = []
 
-for root, dirs, files in os.walk(base_path + "data"):
+for root, dirs, files in os.walk(base_path + 'data'):
     for file in files:
         filename=os.path.join(root, file)
+        stats=os.stat(filename)
         file_names.append(filename)
+        modified_dates.append(
+            datetime.datetime.fromtimestamp(stats.st_mtime).strftime('%Y-%m-%d %-I:%M %p')
+        )        
 
 # set up AgGrid
-df = pd.DataFrame({'File Name' : file_names})
+df = pd.DataFrame({'File Name' : file_names, 'Last Updated': modified_dates})
 gd = GridOptionsBuilder.from_dataframe(df)
-gd.configure_pagination(enabled=True)
-gd.configure_selection(selection_mode="multiple", use_checkbox=True)
-gd.configure_column("File Name", headerCheckboxSelection = True)
+gd.configure_pagination(enabled=False)
+gd.configure_selection(selection_mode='multiple', use_checkbox=True)
+gd.configure_column('File Name', headerCheckboxSelection = True)
 
 # display AgGrid
-file_table = AgGrid(df, fit_columns_on_grid_load=True, gridOptions=gd.build(), update_mode=GridUpdateMode.SELECTION_CHANGED)
+file_table = AgGrid(
+    df,
+    height=500, 
+    fit_columns_on_grid_load=True,
+    gridOptions=gd.build(),
+    update_mode=GridUpdateMode.SELECTION_CHANGED)
 
 run = st.button('Run')
 
 if run:
+    with st.spinner('Running inference...'):
 
-    # set up batch
-    selected_rows = file_table['selected_rows']
-    batch = []
-    
-    for row in selected_rows:
-        file_path = row['File Name']
-        image = Image.open(file_path)
+        progress_bar = st.progress(0)
 
-        # get file_name without extension
-        file_name = file_path.split('/')[-1].split('.')[0]
+        # set up batch
+        selected_rows = file_table['selected_rows']
+        batch = []
         
-        # get DateTime from exif data
-        exifdata = image.getexif()
-        img_date = ''
+        for index, row in enumerate(selected_rows):
+            file_path = row['File Name']
+            image = Image.open(file_path)
 
-        for tag_id in exifdata:
+            # get file_name without extension
+            file_name = file_path.split('/')[-1].split('.')[0]
             
-            # get the tag name, instead of human unreadable tag id
-            tag = TAGS.get(tag_id, tag_id)
-            data = exifdata.get(tag_id)
+            # get DateTime from exif data
+            exifdata = image.getexif()
+            img_date = ''
 
-            if tag == 'DateTime': 
-                img_date = data
+            for tag_id in exifdata:
+                
+                # get the tag name, instead of human unreadable tag id
+                tag = TAGS.get(tag_id, tag_id)
+                data = exifdata.get(tag_id)
+
+                if tag == 'DateTime': 
+                    img_date = data
+            
+            date = img_date.split(' ')[0].replace(':', '-')
+
+            batch.append({
+                'image': np.array(image),
+                'file_name': file_name,
+                'file_path': file_path,
+                'date': date
+            })
         
-        date = img_date.split(' ')[0].replace(':', '-')
+        progress_bar.progress(1 / (len(batch) + 1))
+        
+        run_inference(batch)
 
-        batch.append({
-            'image': np.array(image),
-            'file_name': file_name,
-            'file_path': file_path,
-            'date': date
-        })
-    
-    print(batch)
-    
-    run_inference(batch)
+        time.sleep(1)
+        progress_bar.empty()
 
     
 
