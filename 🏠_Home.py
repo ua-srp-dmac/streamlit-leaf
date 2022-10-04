@@ -30,6 +30,8 @@ from st_aggrid.grid_options_builder import GridOptionsBuilder
 
 @st.cache()
 def setup():
+    """ Setup model from trained weights.
+    """
     # get base data path from user input
     base_path = sys.argv[1]
 
@@ -40,9 +42,11 @@ def setup():
     return base_path
 
 
-# --------------- SETUP MODEL WITH TRAINED WEIGHTS ----------------#
+
 @st.cache()
 def setup_model(base_path):
+    """ Setup model and metadata from trained weights.
+    """
     leaf_cfg = get_cfg()
     leaf_cfg.MODEL.DEVICE='cpu'
     leaf_cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
@@ -58,9 +62,11 @@ def setup_model(base_path):
 
     return (leaf_predictor, leaf_metadata)
 
-# --------------- START RUN INFERENCE FUNCTION ----------------#
+
 @st.cache()
 def run_inference(batch):
+    """ Run prediction on batch of images.
+    """
 
     for index, image in enumerate(batch):
 
@@ -112,6 +118,7 @@ def run_inference(batch):
         else:
             new_file_name = image['date'] + '_' + image['file_name']
 
+        # rename original file
         if rename_files_option:
 
             print('rename files option')
@@ -121,6 +128,7 @@ def run_inference(batch):
 
             os.rename(image['file_path'], new_file_path)
 
+        # save leaf results to file
         if run_model_option: 
             # set up results visualizer
             v = Visualizer(image["image"][:, :, ::-1],
@@ -140,7 +148,6 @@ def run_inference(batch):
 #--------------------- STREAMLIT INTERFACE ----------------------#
 
 base_path = setup()
-print(base_path)
 leaf_predictor, leaf_metadata = setup_model(base_path)
 
 st.title('Leaf Segmentation')
@@ -165,7 +172,7 @@ for root, dirs, files in os.walk(base_path + "data"):
 df = pd.DataFrame({'File Name' : file_names})
 gd = GridOptionsBuilder.from_dataframe(df)
 gd.configure_pagination(enabled=True)
-gd.configure_selection(selection_mode="single", use_checkbox=True)
+gd.configure_selection(selection_mode="multiple", use_checkbox=True)
 gd.configure_column("File Name", headerCheckboxSelection = True)
 
 # display AgGrid
@@ -207,6 +214,8 @@ if run:
             'file_path': file_path,
             'date': date
         })
+    
+    print(batch)
     
     run_inference(batch)
 
