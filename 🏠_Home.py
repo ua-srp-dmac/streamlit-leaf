@@ -2,7 +2,7 @@ import detectron2
 from detectron2.utils.logger import setup_logger
 setup_logger()
 
-# import some common detectron2 utilities
+# detectron2 imports
 from detectron2 import model_zoo
 from detectron2.engine import DefaultPredictor
 from detectron2.data.catalog import Metadata
@@ -17,21 +17,25 @@ import cv2
 import base64
 import numpy as np
 import pandas as pd
+from pathlib import Path
+
 from PIL import Image
 from PIL.ExifTags import TAGS
-from pathlib import Path
+
+# pyzbar is used for decoding QR codes
 from pyzbar.pyzbar import decode
 from pyzbar.pyzbar import ZBarSymbol
-from torchvision import transforms
 
+# streamlit imports
 import streamlit as st
-
 from st_aggrid import AgGrid, GridUpdateMode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 
 
 @st.cache(allow_output_mutation=True)
 def get_base64_of_bin_file(png_file):
+    """ Reads png image so it can be used as a background-image in css. 
+    """
     with open(png_file, "rb") as f:
         data = f.read()
     return base64.b64encode(data).decode()
@@ -44,8 +48,13 @@ def build_markup_for_logo(
     image_width="70%",
     image_height="",
 ):
+    """ Builds makrrkup and css for logo.
+    """
+
     binary_string = get_base64_of_bin_file(png_file)
-    return """
+
+    return (
+        """
             <style>
                 [data-testid="stSidebarNav"] {
                     background-image: url("data:image/png;base64,%s");
@@ -55,16 +64,24 @@ def build_markup_for_logo(
                     background-size: %s %s;
                 }
             </style>
-            """ % (
-        binary_string,
-        background_position,
-        margin_top,
-        image_width,
-        image_height,
+        """ % (
+            binary_string,
+            background_position,
+            margin_top,
+            image_width,
+            image_height,
+        )
     )
 
 
 def add_logo(png_file):
+    """ Streamlit does not easily support adding a logo to the top
+        of the sidebar due to how the multi-page menu is rendered.
+
+        This is a workaround for placing the logo at the top of
+        the sidebar.
+    """
+
     logo_markup = build_markup_for_logo(png_file)
     st.markdown(
         logo_markup,
@@ -203,16 +220,39 @@ def run_inference(batch):
         progress_bar.progress((index + 2) / (len(batch) + 1))
     
     
+def get_files(base_path):
+    """ Walk through file directory and gather necessary information to
+        display file list.
+    """
+
+    file_names = []
+    modified_dates = []
+    
+    for root, dirs, files in os.walk(base_path + 'data'):
+        for file in files:
+            filename=os.path.join(root, file)
+            if filename.lower().endswith('.jpg') || filename.lower().endswith('.jpeg')
+                stats=os.stat(filename)
+                file_names.append(filename)
+                modified_dates.append(
+                    datetime.datetime.fromtimestamp(stats.st_mtime).strftime('%Y-%m-%d %-I:%M %p')
+                )    
+
+    return (file_names, modified_dates)
+        
 
 #--------------------- STREAMLIT INTERFACE ----------------------#
 
+# show logo at top of sidebar
 add_logo('/app/images/srp-logo.png')
 
+# setup
 base_path = setup()
 leaf_predictor, leaf_metadata = setup_model(base_path)
 
-
 st.header('Leaf Segmentation App')
+
+# options
 st.subheader('1. Configure Options')
 st.markdown('If you\'d like to rename file according to the naming convention, select **Rename Files**.')
 
@@ -223,19 +263,7 @@ st.subheader('2. Select Files')
 st.markdown('Select the files you\'d like to analyze.')
 
 # walk through directory to display files in table
-file_names = []
-modified_dates = []
-
-dirs = []
-
-for root, dirs, files in os.walk(base_path + 'data'):
-    for file in files:
-        filename=os.path.join(root, file)
-        stats=os.stat(filename)
-        file_names.append(filename)
-        modified_dates.append(
-            datetime.datetime.fromtimestamp(stats.st_mtime).strftime('%Y-%m-%d %-I:%M %p')
-        )        
+file_names, modified_dates = get_files(base_path)
 
 # set up AgGrid
 df = pd.DataFrame({'File Name' : file_names, 'Last Updated': modified_dates})
@@ -250,9 +278,10 @@ file_table = AgGrid(
     height=500, 
     fit_columns_on_grid_load=True,
     gridOptions=gd.build(),
-    update_mode=GridUpdateMode.SELECTION_CHANGED)
+    update_mode=GridUpdateMode.SELECTION_CHANGED | GridUpdateMode.VALUE_CHANGED | GridUpdateMode.MODEL_CHANGED )
 
 run = st.button('Run')
+
 
 if run:
     with st.spinner('Running inference...'):
@@ -298,6 +327,7 @@ if run:
 
         time.sleep(1)
         progress_bar.empty()
+
 
     
 
