@@ -231,7 +231,7 @@ def get_files(base_path):
     for root, dirs, files in os.walk(base_path + 'data'):
         for file in files:
             filename=os.path.join(root, file)
-            if filename.lower().endswith('.jpg') || filename.lower().endswith('.jpeg')
+            if filename.lower().endswith('.jpg') or filename.lower().endswith('.jpeg'):
                 stats=os.stat(filename)
                 file_names.append(filename)
                 modified_dates.append(
