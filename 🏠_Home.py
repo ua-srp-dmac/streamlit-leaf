@@ -213,7 +213,11 @@ def run_inference(batch):
             result_arr = out.get_image()[:, :, ::-1]
             result_image = Image.fromarray(result_arr)
 
-            save_path = Path(base_path + 'results/' + new_file_name + '-result.JPG')
+            if not old_file_name.startswith(image['date']):
+                save_path = Path(base_path + 'results/' + new_file_name + '-result.JPG')
+            else:
+                save_path = Path(base_path + 'results/' + old_file_name + '-result.JPG')
+
 
             result_image.save(save_path)
         
