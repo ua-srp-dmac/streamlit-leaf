@@ -216,7 +216,7 @@ def run_inference(batch):
             if not old_file_name.startswith(image['date']):
                 save_path = Path(base_path + 'results/' + new_file_name + '-result.JPG')
             else:
-                save_path = Path(base_path + 'results/' + old_file_name + '-result.JPG')
+                save_path = Path(base_path + 'results/' + old_file_name.split('.')[0] + '-result.JPG')
 
 
             result_image.save(save_path)
