@@ -31,6 +31,9 @@ import streamlit as st
 from st_aggrid import AgGrid, GridUpdateMode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 
+from matplotlib import pyplot as plt
+
+from qreader import QReader
 
 @st.cache(allow_output_mutation=True)
 def get_base64_of_bin_file(png_file):
@@ -170,14 +173,41 @@ def run_inference(batch):
             x1 = round(bbox[2].item())
             y1 = round(bbox[3].item())
 
-            # crop to bounding box for QR decoding
-            crop_img = image['image'][ y0:y1, x0:x1]
+            crop_mask = cv2.inRange(crop_img,(0,0,0),(120,120,120))
+            thresholded = cv2.cvtColor(crop_mask, cv2.COLOR_GRAY2BGR)
+            inverted = 255-thresholded # black-in-white
 
-            # decode QR code
-            qr_result = decode(crop_img, symbols=[ZBarSymbol.QRCODE])
+            scale_percent = 20 # percent of original size
+            width = int(crop_img.shape[1] * scale_percent / 100)
+            height = int(crop_img.shape[0] * scale_percent / 100)
+            dim = (width, height)
+            
+            
+            resize image
+            crop_img_resized = cv2.resize(crop_img, dim, interpolation = cv2.INTER_AREA)
 
-            if len(qr_result):
-                qr_result_decoded = qr_result[0].data.decode('utf-8') 
+            st.image(crop_img_resized)
+
+            image_scaled = crop_img.resize((int(round(x*.2)), int(round(y*.2))))
+
+            st.image(crop_img)
+            st.image(inverted)
+
+        # crop to bounding box for QR decoding
+        crop_img = image['image_cv2']
+        crop_img = cv2.cvtColor(crop_img, cv2.COLOR_BGR2RGB)
+        st.image(crop_img)
+
+
+        qreader = QReader()
+        decoded_text = qreader.detect_and_decode(image=crop_img)
+        print('decoded_text', decoded_text)
+            
+        qr_result = decode(crop_img, symbols=[ZBarSymbol.QRCODE])
+        print('QR Result:', qr_result)
+
+        if len(qr_result):
+            qr_result_decoded = qr_result[0].data.decode('utf-8') 
 
         # get directory current image is in
         image_dir = image['file_path'].split('/')[:-1]
@@ -320,6 +350,7 @@ if run:
 
             batch.append({
                 'image': np.array(image),
+                'image_cv2': cv2.imread(file_path),
                 'file_name': file_name,
                 'file_path': file_path,
                 'date': date
