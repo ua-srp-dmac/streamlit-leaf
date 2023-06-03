@@ -18,6 +18,7 @@ import base64
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import subprocess
 
 from PIL import Image
 from PIL.ExifTags import TAGS
@@ -158,17 +159,60 @@ def run_inference(batch):
                 leaf_indices.append(i)
             elif label == 1: # qr
                 qr_indices.append(i)
-
-        qr_result_decoded = None
-        qreader = QReader()
-
-        decoded_text = qreader.detect_and_decode(image=image['image'])
-        print('decoded_text', decoded_text)
-
-        if len(decoded_text):
-            qr_result_decoded = decoded_text[0]
         
-        print('final qr: ', qr_result_decoded)
+        # if qr code was detected, decode
+        crop_img = None
+        
+        if len(qr_indices):
+
+            # get first qr code
+            bbox = pred_boxes[qr_indices[0]]
+
+            # (x0, y0, x1, y1)
+            x0 = round(bbox[0].item()-500)
+            y0 = round(bbox[1].item()-500)
+            x1 = round(bbox[2].item()+500)
+            y1 = round(bbox[3].item()+500)
+
+            # crop to bounding box for QR decoding
+            crop_img = image['image'][ y0:y1, x0:x1]
+            
+            scale_percent = 40 # percent of original size
+            width = int(crop_img.shape[1] * scale_percent / 100)
+            height = int(crop_img.shape[0] * scale_percent / 100)
+            dim = (width, height)
+            
+            
+            # resize image
+            crop_img_resized = cv2.resize(crop_img, dim, interpolation = cv2.INTER_AREA)
+
+            st.image(crop_img_resized)
+
+            image_to_save = Image.fromarray(crop_img_resized)
+            image_to_save.save("qr_crop.jpg")
+       
+        qr_result_decoded = None
+
+        cmd = subprocess.run(
+            ["python", "/app/decode_qr.py"],
+            capture_output=True,
+            check=False
+        )
+        
+        stdout = cmd.stdout.decode()
+
+        if stdout:
+            qr_result_decoded = stdout
+        else:
+            qreader = QReader()
+
+            decoded_text = qreader.detect_and_decode(image=image['image'])
+            print('decoded_text', decoded_text)
+
+            if len(decoded_text):
+                qr_result_decoded = decoded_text[0]
+
+        print('final qr: ', stdout)
 
         # get directory current image is in
         image_dir = image['file_path'].split('/')[:-1]
