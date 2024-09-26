@@ -301,6 +301,25 @@ run_model_option = st.checkbox('Save segmentation results to image', value=True)
 st.subheader('2. Select Files')
 st.markdown('Select the files you\'d like to analyze.')
 
+option = st.selectbox(
+    'ML Model Selection',
+    ('leaf_model.pth','leaf_qr_model.pth','qr_model.pth')
+)
+
+if option == 'leaf_model.pth':
+    leaf_cfg.MODEL.WEIGHTS = base_path + "models/leaf_model.pth"
+    leaf_predictor = DefaultPredictor(leaf_cfg)
+
+if option == 'leaf_qr_model.pth':
+    leaf_cfg.MODEL.WEIGHTS = base_path + "models/leaf_qr_model.pth"
+    leaf_predictor = DefaultPredictor(leaf_cfg)
+
+if option == 'qr_model.pth':
+    leaf_cfg.MODEL.WEIGHTS = base_path + "models/qr_model.pth"
+    leaf_predictor = DefaultPredictor(leaf_cfg)
+
+
+
 # walk through directory to display files in table
 file_names, modified_dates = get_files(base_path)
 
