@@ -147,8 +147,6 @@ def run_inference_in_batches(all_images, batch_size=10):
         end_idx = min((batch_idx + 1) * batch_size, len(all_images))
         batch = all_images[start_idx:end_idx]
         
-        print(f"Processing batch {batch_idx + 1} of {total_batches}...")
-        
         # Process each image in the batch
         for index, image in enumerate(batch):
             # Run inference for the current image
@@ -275,6 +273,8 @@ def run_inference(batch, batch_idx, batch_size, total_images):
 
     for index, image in enumerate(batch):
 
+        progress_bar_text.write(f"Processing image {((batch_size * batch_idx) + index + 1)} of {total_images} ({image['file_name']})")
+
         # run interence on selected image
         outputs = leaf_predictor(image['image'])
 
@@ -337,7 +337,6 @@ def run_inference(batch, batch_idx, batch_size, total_images):
             qreader = QReader()
 
             decoded_text = qreader.detect_and_decode(image=image['image'])
-            print('decoded_text', decoded_text)
 
             if len(decoded_text):
                 qr_result_decoded = decoded_text[0]
@@ -386,7 +385,7 @@ def run_inference(batch, batch_idx, batch_size, total_images):
 
             result_image.save(save_path)
         
-        progress_bar.progress(((batch_size * batch_idx) + (index + 2)) / total_images + 1)
+        progress_bar.progress(((batch_size * batch_idx) + index + 1) / (total_images))
     del batch  # Remove batch from memory
     del outputs  # Clear the outputs
     
@@ -433,6 +432,8 @@ run_model_option = st.checkbox('Save segmentation results to image', value=True)
 st.subheader('2. Select Files')
 st.markdown('Select the files you\'d like to analyze.')
 
+progress_bar_text = st.empty()
+
 # walk through directory to display files in table
 file_names, modified_dates = get_files(base_path)
 
@@ -458,6 +459,7 @@ if run:
     with st.spinner('Running inference...'):
 
         progress_bar = st.progress(0)
+        progress_bar_text = st.empty()
 
         # set up batch
         selected_rows = file_table['selected_rows']
@@ -472,9 +474,8 @@ if run:
             end_idx = min((batch_idx + 1) * batch_size, len(selected_rows))
             batch = []
             
-            print(f"Processing batch {batch_idx + 1} of {total_batches}...")
+            progress_bar_text.write(f"Preparing batch {batch_idx + 1} of {total_batches}")
         
-            
             for index in range(start_idx, end_idx):
                 row = selected_rows[index]
                 file_path = row['File Name']
@@ -507,11 +508,11 @@ if run:
                     'date': date
                 })
             
-            progress_bar.progress(1 / (len(selected_rows) + 1))
             run_inference(batch, batch_idx, batch_size, total_images=len(selected_rows))
 
         time.sleep(1)
         progress_bar.empty()
+        progress_bar_text.write('Processing complete 🎉')
 
 
     
