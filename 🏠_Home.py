@@ -114,7 +114,7 @@ def setup():
         print('In if statement', full_results_path)
         os.mkdir(full_results_path) 
 
-    return full_data_path, full_model_file, full_results_path
+    return full_data_path, str(full_model_file), full_results_path
 
 
 @st.cache()
