@@ -112,6 +112,8 @@ def setup():
     full_model_file = str(full_model_file.resolve())
     full_results_path = str(full_results_path.resolve())
 
+    print(full_results_path)
+
     # if results path doesn't exist, create it
     if not os.path.isdir(full_results_path):
         os.mkdir(full_results_path) 
