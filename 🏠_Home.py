@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import subprocess
+import csv
 
 from PIL import Image
 from PIL.ExifTags import TAGS
@@ -136,9 +137,30 @@ def setup_model(base_path):
 
     return (leaf_predictor, leaf_metadata)
 
+def write_results_to_csv(csv_file_path, batch_results):
+    """ Write batch results to a CSV file. """
+    # Check if the CSV file exists
+    file_exists = os.path.isfile(csv_file_path)
+
+    # Open the CSV file in append mode
+    with open(csv_file_path, mode='a', newline='') as csv_file:
+        writer = csv.DictWriter(
+            csv_file, 
+            fieldnames=["Image Name", "Leaf Pixel Area", "Leaf Count", "Red Square Pixel Area", "QR Code Pixel Area", "Leaf Area cm2", "Decoded QR"]
+        )
+
+        # Write the header if the file doesn't exist
+        if not file_exists:
+            writer.writeheader()
+
+        # Write the batch results
+        writer.writerows(batch_results)
+
 def run_inference(batch, batch_idx, batch_size, total_images):
     """ Run prediction on batch of images.
     """
+
+    batch_results = []
 
     for index, image in enumerate(batch):
 
@@ -150,17 +172,38 @@ def run_inference(batch, batch_idx, batch_size, total_images):
         # get bboxes and class labels
         pred_boxes = outputs['instances'].pred_boxes.tensor.numpy()
         class_labels = outputs['instances'].pred_classes.numpy()
+        pred_masks = outputs['instances'].pred_masks.numpy()
+
+        # Initialize counts for the current image
+        leaf_pixel_area = 0
+        red_square_pixel_area = 0
+        qr_code_pixel_area = 0
+        leaf_count = 0
+        leaf_area = None
 
         qr_indices = []
-        leaf_indices = []
         
-        # get indices of leaves and qr codes
+        # get indices of leaves, qr codes, and red reference square
         for i, label in enumerate(class_labels):
-            if label == 0: # leaf
-                leaf_indices.append(i)
-            elif label == 1: # qr
+            mask = pred_masks[i]
+            pixel_count = mask.sum()  # Count the number of True pixels
+
+            if label == 0:  # Leaf
+                leaf_pixel_area += pixel_count
+                leaf_count += 1
+            elif label == 1:  # QR code
+                qr_code_pixel_area += pixel_count
                 qr_indices.append(i)
+            elif label == 2:  # Red square
+                red_square_pixel_area += pixel_count
         
+        # get leaf area in cm2 using red square as reference, or QR code if red square not detected
+        if (red_square_pixel_area):
+            leaf_area = leaf_area = (4 * leaf_pixel_area) / red_square_pixel_area
+        elif (qr_code_pixel_area):
+            leaf_area = leaf_area = (1.44 * leaf_pixel_area) / qr_code_pixel_area
+
+
         # if qr code was detected, decode
         crop_img = None
         
@@ -182,7 +225,6 @@ def run_inference(batch, batch_idx, batch_size, total_images):
             width = int(crop_img.shape[1] * scale_percent / 100)
             height = int(crop_img.shape[0] * scale_percent / 100)
             dim = (width, height)
-            
             
             # resize image
             crop_img_resized = cv2.resize(crop_img, dim, interpolation = cv2.INTER_AREA)
@@ -209,8 +251,18 @@ def run_inference(batch, batch_idx, batch_size, total_images):
 
             if len(decoded_text):
                 qr_result_decoded = decoded_text[0]
+        
 
-        print('final qr: ', stdout)
+        # Collect results for the current image
+        batch_results.append({
+            "Image Name": image['file_name'],
+            "Leaf Pixel Area": leaf_pixel_area,
+            "Leaf Count": leaf_count,
+            "Red Square Pixel Area": red_square_pixel_area,
+            "QR Code Pixel Area": qr_code_pixel_area,
+            "Leaf Area cm2": leaf_area,
+            "Decoded QR": qr_result_decoded if qr_result_decoded is not None else "Failed to decode"
+        })
 
         # get directory current image is in
         image_dir = image['file_path'].split('/')[:-1]
@@ -225,6 +277,7 @@ def run_inference(batch, batch_idx, batch_size, total_images):
         else:
             new_file_name = image['date'] + '_' + image['file_name']
 
+
         # rename original file
         if rename_files_option:
  
@@ -234,7 +287,7 @@ def run_inference(batch, batch_idx, batch_size, total_images):
                 os.rename(image['file_path'], new_file_path)
 
         # save leaf results to file
-        if run_model_option: 
+        if save_masks_to_img: 
             # set up results visualizer
             v = Visualizer(image['image'][:, :, ::-1],
                 metadata=leaf_metadata, 
@@ -255,6 +308,9 @@ def run_inference(batch, batch_idx, batch_size, total_images):
             result_image.save(save_path)
         
         progress_bar.progress(((batch_size * batch_idx) + index + 1) / (total_images))
+    
+    write_results_to_csv(base_path + 'results/results.csv' , batch_results)
+    
     del batch  # Remove batch from memory
     del outputs  # Clear the outputs
     
@@ -295,8 +351,8 @@ st.header('Leaf Segmentation App')
 st.subheader('1. Configure Options')
 st.markdown('If you\'d like to rename file according to the naming convention, select **Rename Files**.')
 
-rename_files_option = st.checkbox('Rename files', value=True)
-run_model_option = st.checkbox('Save segmentation results to image', value=True)
+rename_files_option = st.checkbox('Rename files', value=False)
+save_masks_to_img = st.checkbox('Save segmentation results to image', value=False)
 
 st.subheader('2. Select Files')
 st.markdown('Select the files you\'d like to analyze.')
@@ -367,7 +423,6 @@ if run:
                         img_date = data
                 
                 date = img_date.split(' ')[0].replace(':', '-')
-                print(index)
 
                 batch.append({
                     'image': np.array(image),
