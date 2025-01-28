@@ -2,18 +2,21 @@ import streamlit as st
 
 import os
 import sys
+from pathlib import Path
 
 from PIL import Image
 import pandas as pd
 from st_aggrid import AgGrid, GridUpdateMode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 
-base_path = sys.argv[1]
+results_path = sys.argv[3]
+full_results_path = Path("/data-store") / results_path
+full_results_path = str(full_results_path.resolve())
 
 file_names = []
 dirs = []
 
-for root, dirs, files in os.walk(base_path + 'results'):
+for root, dirs, files in os.walk(full_results_path):
     for file in files:
         filename=os.path.join(root, file)
         file_names.append(filename)
