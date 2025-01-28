@@ -28,7 +28,9 @@ Once you have your folders populated, you can build and run the docker container
 $ cd streamlit-leaf
 $ docker build -t <your-dockerhub-username>/streamlit-leaf:latest .
 
-$ docker run --rm -e PYTHONUNBUFFERED=1 -v /path/to/data:/cyverse/data -v /path/to/models:/cyverse/models -w /cyverse/data -p 8501:8501 <your-dockerhub-username>/streamlit-leaf:latest -p /cyverse/
+$ docker run --rm -e PYTHONUNBUFFERED=1 -v /path/to/streamlit-leaf-seg:/data-store -p 8501:8501 <your-dockerhub-username>/streamlit-leaf:latest -d data -m models/leaf_qr_model.pth -r results
 ```
+
+We mount to the /data-store/ directory because thsi app is designed to be deployed as a CyVerse VICE app and this is how VICE apps access files from the Data Store.
 
 The streamlit app can then be accessed at `http://localhost:8501`.
