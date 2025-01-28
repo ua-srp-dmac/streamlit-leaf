@@ -102,11 +102,21 @@ def setup():
     model_file = sys.argv[2]
     results_path = sys.argv[3]
 
-    # if results path doesn't exist, create it
-    if not os.path.isdir(results_path):
-        os.mkdir(results_path) 
+    # Prefix all paths with /data-store/
+    full_data_path = Path("/data-store") / data_path
+    full_model_file = Path("/data-store") / model_file
+    full_results_path = Path("/data-store") / results_path
 
-    return data_path, model_file, results_path
+    # Ensure paths are absolute and nicely formatted
+    full_data_path = str(full_data_path.resolve())
+    full_model_file = str(full_model_file.resolve())
+    full_results_path = str(full_results_path.resolve())
+
+    # if results path doesn't exist, create it
+    if not os.path.isdir(full_results_path):
+        os.mkdir(full_results_path) 
+
+    return full_data_path, full_model_file, full_results_path
 
 
 @st.cache()
