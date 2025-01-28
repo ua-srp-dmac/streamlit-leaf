@@ -98,17 +98,19 @@ def setup():
     """ App setup that needs to run once at initialization.
     """
     # get base data path from user input
-    base_path = sys.argv[1]
+    data_path = sys.argv[1]
+    model_file = sys.argv[2]
+    results_path = sys.argv[3]
 
     # if results path doesn't exist, create it
-    if not os.path.isdir(base_path + 'results'):
-        os.mkdir(base_path + 'results') 
+    if not os.path.isdir(results_path):
+        os.mkdir(results_path) 
 
-    return base_path
+    return data_path, model_file, results_path
 
 
 @st.cache()
-def setup_model(base_path):
+def setup_model(model_file):
     """ Setup model and metadata from trained weights.
     """
 
@@ -124,7 +126,7 @@ def setup_model(base_path):
     leaf_cfg.MODEL.ROI_HEADS.NUM_CLASSES = 3 
     
     # path to trained weights
-    leaf_cfg.MODEL.WEIGHTS = base_path + 'models/leaf_qr_model.pth' 
+    leaf_cfg.MODEL.WEIGHTS = model_file 
     
     # set a custom testing threshold
     leaf_cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.7  
@@ -300,22 +302,22 @@ def run_inference(batch, batch_idx, batch_size, total_images):
             result_image = Image.fromarray(result_arr)
 
             if not old_file_name.startswith(image['date']):
-                save_path = Path(base_path + 'results/' + new_file_name + '-result.JPG')
+                save_path = Path(results_path) / f"{new_file_name}-result.JPG"
             else:
-                save_path = Path(base_path + 'results/' + old_file_name.split('.')[0] + '-result.JPG')
+                save_path = Path(results_path) / f"{old_file_name.split('.')[0]}-result.JPG"
 
 
             result_image.save(save_path)
         
         progress_bar.progress(((batch_size * batch_idx) + index + 1) / (total_images))
     
-    write_results_to_csv(base_path + 'results/results.csv' , batch_results)
+    write_results_to_csv(Path(results_path) / 'results.csv', batch_results)
     
     del batch  # Remove batch from memory
     del outputs  # Clear the outputs
     
     
-def get_files(base_path):
+def get_files(data_path):
     """ Walk through file directory and gather necessary information to
         display file list.
     """
@@ -323,7 +325,7 @@ def get_files(base_path):
     file_names = []
     modified_dates = []
     
-    for root, dirs, files in os.walk(base_path + 'data'):
+    for root, dirs, files in os.walk(data_path):
         for file in files:
             filename=os.path.join(root, file)
             if filename.lower().endswith('.jpg') or filename.lower().endswith('.jpeg'):
@@ -342,8 +344,8 @@ def get_files(base_path):
 add_logo('/app/images/srp-logo.png')
 
 # setup
-base_path = setup()
-leaf_predictor, leaf_metadata = setup_model(base_path)
+data_path, model_file, results_path = setup()
+leaf_predictor, leaf_metadata = setup_model(model_file)
 
 st.header('Leaf Segmentation App')
 
@@ -360,7 +362,7 @@ st.markdown('Select the files you\'d like to analyze.')
 progress_bar_text = st.empty()
 
 # walk through directory to display files in table
-file_names, modified_dates = get_files(base_path)
+file_names, modified_dates = get_files(data_path)
 
 # set up AgGrid
 df = pd.DataFrame({'File Name' : file_names, 'Last Updated': modified_dates})

@@ -1,7 +1,16 @@
-while getopts "p:" opt; do
+while getopts "d:m:r:" opt; do
   case ${opt} in
-    p)
-      streamlit_path=$OPTARG
+    d)
+      data_path=$OPTARG
+      echo "Data path: $data_path"
+      ;;
+    m)
+      model_path=$OPTARG
+      echo "Model path: $model_path"
+      ;;
+    r)
+      results_path=$OPTARG
+      echo "Results path: $results_path"
       ;;
     \?)
       echo "Invalid option: -$OPTARG" >&2
@@ -14,6 +23,4 @@ while getopts "p:" opt; do
   esac
 done
 
-echo "$streamlit_path"
-
-exec streamlit run /app/🏠_Home.py $streamlit_path --server.enableCORS false --server.enableXsrfProtection false
+exec streamlit run /app/🏠_Home.py --server.enableCORS false --server.enableXsrfProtection false -- $data_path $model_path $results_path
