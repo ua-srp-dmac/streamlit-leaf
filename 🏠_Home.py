@@ -99,15 +99,10 @@ def setup():
     """
     # get base data path from user input
     data_path = sys.argv[1]
-    model_file = sys.argv[2]
+    model_file =  sys.argv[2]
     results_path = sys.argv[3]
 
-    # Prefix all paths with /data-store/
-    full_data_path = os.path.join("/data-store", data_path)
-    full_model_file = os.path.join("/data-store", model_file)
-    full_results_path = os.path.join("/data-store", results_path)
-
-    return full_data_path, full_model_file, full_results_path
+    return data_path, model_file, results_path
 
 
 @st.cache()
