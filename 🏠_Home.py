@@ -20,6 +20,7 @@ import pandas as pd
 from pathlib import Path
 import subprocess
 import csv
+import re
 
 from PIL import Image
 from PIL.ExifTags import TAGS
@@ -93,7 +94,6 @@ def add_logo(png_file):
         unsafe_allow_html=True,
     )
 
-@st.cache()
 def setup():
     """ App setup that needs to run once at initialization.
     """
@@ -103,11 +103,11 @@ def setup():
     results_path = sys.argv[3]
 
     # Prefix all paths with /data-store/
-    full_data_path = Path("/data-store") / data_path
-    full_model_file = Path("/data-store") / model_file
-    full_results_path = Path("/data-store") / results_path
+    full_data_path = str(Path("/data-store") / data_path)
+    full_model_file = str(Path("/data-store") / model_file)
+    full_results_path = str(Path("/data-store") / results_path)
 
-    return full_data_path, str(full_model_file), full_results_path
+    return full_data_path, full_model_file, full_results_path
 
 
 @st.cache()
@@ -303,16 +303,16 @@ def run_inference(batch, batch_idx, batch_size, total_images):
             result_image = Image.fromarray(result_arr)
 
             if not old_file_name.startswith(image['date']):
-                save_path = Path(results_path) / f"{new_file_name}-result.JPG"
+                save_path = Path(full_results_path) / analysis_name / f"{new_file_name}-result.JPG"
             else:
-                save_path = Path(results_path) / f"{old_file_name.split('.')[0]}-result.JPG"
+                save_path = Path(full_results_path) / analysis_name / f"{old_file_name.split('.')[0]}-result.JPG"
 
 
             result_image.save(save_path)
         
         progress_bar.progress(((batch_size * batch_idx) + index + 1) / (total_images))
     
-    write_results_to_csv(Path(results_path) / 'results.csv', batch_results)
+    write_results_to_csv(Path(full_results_path) / analysis_name / 'results.csv', batch_results)
     
     del batch  # Remove batch from memory
     del outputs  # Clear the outputs
@@ -345,20 +345,35 @@ def get_files(data_path):
 add_logo('/app/images/srp-logo.png')
 
 # setup
-data_path, model_file, results_path = setup()
-
-# if results path doesn't exist, create it
-if not os.path.isdir(results_path):
-    print('In if statement', results_path)
-    os.mkdir(results_path) 
-
-leaf_predictor, leaf_metadata = setup_model(model_file)
+full_data_path, full_model_file, full_results_path = setup()
+leaf_predictor, leaf_metadata = setup_model(full_model_file)
 
 st.header('Leaf Segmentation App')
 
 # options
 st.subheader('1. Configure Options')
 st.markdown('If you\'d like to rename file according to the naming convention, select **Rename Files**.')
+
+
+# Get current date in YYYY-MM-DD format
+current_date = datetime.datetime.now().strftime("%Y-%m-%d_analysis")
+
+# Create a text input field with current date as the default
+analysis_name = st.text_input("Analysis Name", value=current_date)
+
+# Validate the input
+is_valid = True
+if " " in analysis_name:
+    st.error("Analysis Name cannot contain spaces.")
+    is_valid = False
+elif not re.match(r"^[a-zA-Z0-9_-]+$", analysis_name):
+    st.error("Only letters, numbers, underscores, and dashes are allowed.")
+    is_valid = False
+elif not analysis_name.strip():
+    st.error("Analysis Name is required.")
+    is_valid = False
+
+button_disabled = not is_valid
 
 rename_files_option = st.checkbox('Rename files', value=False)
 save_masks_to_img = st.checkbox('Save segmentation results to image', value=False)
@@ -369,7 +384,7 @@ st.markdown('Select the files you\'d like to analyze.')
 progress_bar_text = st.empty()
 
 # walk through directory to display files in table
-file_names, modified_dates = get_files(data_path)
+file_names, modified_dates = get_files(full_data_path)
 
 # set up AgGrid
 df = pd.DataFrame({'File Name' : file_names, 'Last Updated': modified_dates})
@@ -386,11 +401,24 @@ file_table = AgGrid(
     gridOptions=gd.build(),
     update_mode=GridUpdateMode.SELECTION_CHANGED | GridUpdateMode.VALUE_CHANGED | GridUpdateMode.MODEL_CHANGED )
 
-run = st.button('Run')
+run = st.button('Run', disabled=button_disabled)
 
 
 if run:
     with st.spinner('Running inference...'):
+
+        # Ensure the results_path exists
+        if not os.path.isdir(full_results_path):
+            print(f"Creating results directory at {full_results_path}")
+            os.mkdir(full_results_path)
+
+        # Define the analysis folder based on the analysis_name
+        analysis_folder = os.path.join(full_results_path, analysis_name)
+
+        # Ensure the analysis folder exists, if not, create it
+        if not os.path.isdir(analysis_folder):
+            print(f"Creating analysis folder at {analysis_folder}")
+            os.mkdir(analysis_folder)
 
         progress_bar = st.progress(0)
         progress_bar_text = st.empty()
