@@ -107,13 +107,6 @@ def setup():
     full_model_file = Path("/data-store") / model_file
     full_results_path = Path("/data-store") / results_path
 
-    print('FULL results:', full_results_path)
-
-    # if results path doesn't exist, create it
-    if not os.path.isdir(full_results_path):
-        print('In if statement', full_results_path)
-        os.mkdir(full_results_path) 
-
     return full_data_path, str(full_model_file), full_results_path
 
 
@@ -353,6 +346,12 @@ add_logo('/app/images/srp-logo.png')
 
 # setup
 data_path, model_file, results_path = setup()
+
+# if results path doesn't exist, create it
+if not os.path.isdir(results_path):
+    print('In if statement', results_path)
+    os.mkdir(results_path) 
+
 leaf_predictor, leaf_metadata = setup_model(model_file)
 
 st.header('Leaf Segmentation App')
