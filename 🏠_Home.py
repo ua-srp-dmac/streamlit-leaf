@@ -103,9 +103,9 @@ def setup():
     results_path = sys.argv[3]
 
     # Prefix all paths with /data-store/
-    full_data_path = str(Path("/data-store") / data_path)
-    full_model_file = str(Path("/data-store") / model_file)
-    full_results_path = str(Path("/data-store") / results_path)
+    full_data_path = os.path.join("/data-store", data_path)
+    full_model_file = os.path.join("/data-store", model_file)
+    full_results_path = os.path.join("/data-store", results_path)
 
     return full_data_path, full_model_file, full_results_path
 
