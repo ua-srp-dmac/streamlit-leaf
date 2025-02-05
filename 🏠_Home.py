@@ -21,6 +21,7 @@ from pathlib import Path
 import subprocess
 import csv
 import re
+import gc
 
 from PIL import Image
 from PIL.ExifTags import TAGS
@@ -167,36 +168,43 @@ def write_results_to_csv(csv_file_path, batch_results):
         writer.writerows(batch_results)
 
 def run_inference(batch, batch_idx, batch_size, total_images):
-    """ Run prediction on batch of images.
-    """
+    """Run prediction on a batch of images with optimized memory usage."""
 
     batch_results = []
 
-    for index, image in enumerate(batch):
+    for index, item in enumerate(batch):
+        file_path = item['file_path']
+        file_name = item['file_name']
+        date = item['date']
 
-        progress_bar_text.write(f"Processing image {((batch_size * batch_idx) + index + 1)} of {total_images} ({image['file_name']})")
+        progress_bar_text.write(
+            f"Processing image {((batch_size * batch_idx) + index + 1)} of {total_images} ({file_name})"
+        )
 
-        # run interence on selected image
-        outputs = leaf_predictor(image['image'])
+        # Load image only when needed
+        with Image.open(file_path) as img:
+            image_np = np.array(img)
 
-        # get bboxes and class labels
-        pred_boxes = outputs['instances'].pred_boxes.tensor.numpy()
-        class_labels = outputs['instances'].pred_classes.numpy()
-        pred_masks = outputs['instances'].pred_masks.numpy()
+        # Run inference
+        outputs = leaf_predictor(image_np)
 
-        # Initialize counts for the current image
+        # Convert tensors to NumPy early
+        pred_boxes = outputs['instances'].pred_boxes.tensor.cpu().numpy()
+        class_labels = outputs['instances'].pred_classes.cpu().numpy()
+        pred_masks = outputs['instances'].pred_masks.cpu().numpy()
+
+        # Initialize counts
         leaf_pixel_area = 0
         red_square_pixel_area = 0
         qr_code_pixel_area = 0
         leaf_count = 0
         leaf_area = None
-
         qr_indices = []
-        
-        # get indices of leaves, qr codes, and red reference square
+
+        # Process predicted masks
         for i, label in enumerate(class_labels):
             mask = pred_masks[i]
-            pixel_count = mask.sum()  # Count the number of True pixels
+            pixel_count = mask.sum()
 
             if label == 0:  # Leaf
                 leaf_pixel_area += pixel_count
@@ -206,123 +214,90 @@ def run_inference(batch, batch_idx, batch_size, total_images):
                 qr_indices.append(i)
             elif label == 2:  # Red square
                 red_square_pixel_area += pixel_count
-        
-        # get leaf area in cm2 using red square as reference, or QR code if red square not detected
-        if (red_square_pixel_area):
-            leaf_area = leaf_area = (4 * leaf_pixel_area) / red_square_pixel_area
-        elif (qr_code_pixel_area):
-            leaf_area = leaf_area = (1.44 * leaf_pixel_area) / qr_code_pixel_area
 
+        # Calculate leaf area
+        if red_square_pixel_area:
+            leaf_area = (4 * leaf_pixel_area) / red_square_pixel_area
+        elif qr_code_pixel_area:
+            leaf_area = (1.44 * leaf_pixel_area) / qr_code_pixel_area
 
-        # if qr code was detected, decode
-        crop_img = None
-        
-        if len(qr_indices):
-
-            # get first qr code
-            bbox = pred_boxes[qr_indices[0]]
-
-            # (x0, y0, x1, y1)
-            x0 = round(bbox[0].item()-500)
-            y0 = round(bbox[1].item()-500)
-            x1 = round(bbox[2].item()+500)
-            y1 = round(bbox[3].item()+500)
-
-            # crop to bounding box for QR decoding
-            crop_img = image['image'][ y0:y1, x0:x1]
-            
-            scale_percent = 40 # percent of original size
-            width = int(crop_img.shape[1] * scale_percent / 100)
-            height = int(crop_img.shape[0] * scale_percent / 100)
-            dim = (width, height)
-            
-            # resize image
-            crop_img_resized = cv2.resize(crop_img, dim, interpolation = cv2.INTER_AREA)
-
-            image_to_save = Image.fromarray(crop_img_resized)
-            image_to_save.save("qr_crop.jpg")
-       
+        # Decode QR code
         qr_result_decoded = None
+        if qr_indices:
+            bbox = pred_boxes[qr_indices[0]]
+            x0, y0, x1, y1 = map(round, [bbox[0] - 500, bbox[1] - 500, bbox[2] + 500, bbox[3] + 500])
 
-        cmd = subprocess.run(
-            ["python", "/app/decode_qr.py"],
-            capture_output=True,
-            check=False
-        )
-        
-        stdout = cmd.stdout.decode()
+            # Crop image for QR decoding
+            with Image.open(file_path) as img:
+                crop_img = img.crop((x0, y0, x1, y1))
 
-        if stdout:
-            qr_result_decoded = stdout
-        else:
-            qreader = QReader()
+            # Resize image
+            crop_img_resized = crop_img.resize(
+                (int(crop_img.width * 0.4), int(crop_img.height * 0.4)), Image.ANTIALIAS
+            )
 
-            decoded_text = qreader.detect_and_decode(image=image['image'])
+            crop_img_resized.save("qr_crop.jpg")
 
-            if len(decoded_text):
-                qr_result_decoded = decoded_text[0]
-        
+            # Run external QR decoder
+            cmd = subprocess.run(
+                ["python", "/app/decode_qr.py"],
+                capture_output=True,
+                check=False
+            )
 
-        # Collect results for the current image
+            stdout = cmd.stdout.decode()
+            qr_result_decoded = stdout if stdout else None
+
+            if not qr_result_decoded:
+                qreader = QReader()
+                decoded_text = qreader.detect_and_decode(image=image_np)
+                qr_result_decoded = decoded_text[0] if decoded_text else "Failed to decode"
+
+        # Collect results
         batch_results.append({
-            "Image Name": image['file_name'],
+            "Image Name": file_name,
             "Leaf Pixel Area": leaf_pixel_area,
             "Leaf Count": leaf_count,
             "Red Square Pixel Area": red_square_pixel_area,
             "QR Code Pixel Area": qr_code_pixel_area,
             "Leaf Area cm2": leaf_area,
-            "Decoded QR": qr_result_decoded if qr_result_decoded is not None else "Failed to decode"
+            "Decoded QR": qr_result_decoded or "Failed to decode"
         })
 
-        # get directory current image is in
-        image_dir = image['file_path'].split('/')[:-1]
-        image_dir = '/'.join(image_dir)
+        # Rename original file if needed
+        image_dir = '/'.join(file_path.split('/')[:-1])
+        old_file_name = file_path.split('/')[-1]
 
-        old_file_name = image['file_path'].split('/')[-1]
-        new_file_name = None
+        new_file_name = f"{date}_{qr_result_decoded}" if qr_result_decoded else f"{date}_{file_name}"
 
-        # if QR was decoded, name results file w/ plant ID
-        if qr_result_decoded:
-            new_file_name = image['date'] + '_' + qr_result_decoded
-        else:
-            new_file_name = image['date'] + '_' + image['file_name']
-
-
-        # rename original file
         if rename_files_option:
- 
-            new_file_path = image_dir + '/' + new_file_name + '.JPG'
-            
-            if not old_file_name.startswith(image['date']):
-                os.rename(image['file_path'], new_file_path)
+            new_file_path = f"{image_dir}/{new_file_name}.JPG"
+            if not old_file_name.startswith(date):
+                os.rename(file_path, new_file_path)
 
-        # save leaf results to file
-        if save_masks_to_img: 
-            # set up results visualizer
-            v = Visualizer(image['image'][:, :, ::-1],
-                metadata=leaf_metadata, 
-                scale=0.5, 
-                instance_mode=ColorMode.SEGMENTATION
-            )
-
+        # Save visualization results
+        if save_masks_to_img:
+            v = Visualizer(image_np[:, :, ::-1], metadata=leaf_metadata, scale=0.5, instance_mode=ColorMode.SEGMENTATION)
             out = v.draw_instance_predictions(outputs['instances'].to('cpu'))
-            result_arr = out.get_image()[:, :, ::-1]
-            result_image = Image.fromarray(result_arr)
+            result_image = Image.fromarray(out.get_image()[:, :, ::-1])
 
-            if not old_file_name.startswith(image['date']):
-                save_path = Path(full_results_path) / analysis_name / f"{new_file_name}-result.JPG"
-            else:
-                save_path = Path(full_results_path) / analysis_name / f"{old_file_name.split('.')[0]}-result.JPG"
-
-
+            save_path = Path(results_path) / analysis_name / f"{new_file_name}-result.JPG"
             result_image.save(save_path)
-        
-        progress_bar.progress(((batch_size * batch_idx) + index + 1) / (total_images))
-    
-    write_results_to_csv(Path(full_results_path) / analysis_name / 'results.csv', batch_results)
-    
-    del batch  # Remove batch from memory
-    del outputs  # Clear the outputs
+
+        # Free memory for each iteration
+        del image_np
+        del outputs
+        del pred_boxes, class_labels, pred_masks
+        gc.collect()
+
+        progress_bar.progress(((batch_size * batch_idx) + index + 1) / total_images)
+
+    # Save batch results
+    write_results_to_csv(Path(results_path) / analysis_name / 'results.csv', batch_results)
+
+    # Final cleanup
+    del batch_results
+    gc.collect()
     
     
 def get_files(data_path):
@@ -352,8 +327,8 @@ def get_files(data_path):
 add_logo('/app/images/srp-logo.png')
 
 # setup
-full_data_path, full_model_file, full_results_path = setup()
-leaf_predictor, leaf_metadata = setup_model(full_model_file)
+data_path, model_file, results_path = setup()
+leaf_predictor, leaf_metadata = setup_model(model_file)
 
 st.header('Leaf Segmentation App')
 
@@ -391,7 +366,7 @@ st.markdown('Select the files you\'d like to analyze.')
 progress_bar_text = st.empty()
 
 # walk through directory to display files in table
-file_names, modified_dates = get_files(full_data_path)
+file_names, modified_dates = get_files(data_path)
 
 # set up AgGrid
 df = pd.DataFrame({'File Name' : file_names, 'Last Updated': modified_dates})
@@ -414,68 +389,42 @@ run = st.button('Run', disabled=button_disabled)
 if run:
     with st.spinner('Running inference...'):
 
-        # Ensure the results_path exists
-        if not os.path.isdir(full_results_path):
-            print(f"Creating results directory at {full_results_path}")
-            os.mkdir(full_results_path)
-
-        # Define the analysis folder based on the analysis_name
-        analysis_folder = os.path.join(full_results_path, analysis_name)
-
-        # Ensure the analysis folder exists, if not, create it
-        if not os.path.isdir(analysis_folder):
-            print(f"Creating analysis folder at {analysis_folder}")
-            os.mkdir(analysis_folder)
+        # Ensure directories exist
+        os.makedirs(results_path, exist_ok=True)
+        os.makedirs(os.path.join(results_path, analysis_name), exist_ok=True)
 
         progress_bar = st.progress(0)
         progress_bar_text = st.empty()
 
-        # set up batch
         selected_rows = file_table['selected_rows']
-        batch = []
         batch_size = 10
+        total_batches = (len(selected_rows) + batch_size - 1) // batch_size  # Efficient batch count
 
-        total_batches = len(selected_rows) // batch_size + (1 if len(selected_rows) % batch_size != 0 else 0)
-    
         for batch_idx in range(total_batches):
-            # Get the current batch
             start_idx = batch_idx * batch_size
-            end_idx = min((batch_idx + 1) * batch_size, len(selected_rows))
+            end_idx = min(start_idx + batch_size, len(selected_rows))
             batch = []
-            
+
             progress_bar_text.write(f"Preparing batch {batch_idx + 1} of {total_batches}")
-        
+
             for index in range(start_idx, end_idx):
                 row = selected_rows[index]
                 file_path = row['File Name']
-                image = Image.open(file_path)
+                file_name = os.path.splitext(os.path.basename(file_path))[0]  # More efficient parsing
 
-                # get file_name without extension
-                file_name = file_path.split('/')[-1].split('.')[0]
+                # Read DateTime EXIF metadata (only the needed tag)
+                with Image.open(file_path) as image:
+                    exifdata = image.getexif()
+                    img_date = exifdata.get(306, '')  # 306 = DateTime tag
                 
-                # get DateTime from exif data
-                exifdata = image.getexif()
-                img_date = ''
-
-                for tag_id in exifdata:
-                    
-                    # get the tag name, instead of human unreadable tag id
-                    tag = TAGS.get(tag_id, tag_id)
-                    data = exifdata.get(tag_id)
-
-                    if tag == 'DateTime': 
-                        img_date = data
-                
-                date = img_date.split(' ')[0].replace(':', '-')
+                date = img_date.split(' ')[0].replace(':', '-') if img_date else ''
 
                 batch.append({
-                    'image': np.array(image),
-                    'image_cv2': cv2.imread(file_path),
+                    'file_path': file_path,  # Store path, not full image
                     'file_name': file_name,
-                    'file_path': file_path,
                     'date': date
                 })
-            
+
             run_inference(batch, batch_idx, batch_size, total_images=len(selected_rows))
 
         time.sleep(1)
