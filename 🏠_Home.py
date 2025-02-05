@@ -94,6 +94,12 @@ def add_logo(png_file):
         unsafe_allow_html=True,
     )
 
+def prepend_data_store(path):
+    """Ensure path is prefixed with /data-store correctly."""
+    if path.startswith('/'):
+        return os.path.join('/data-store', path.lstrip('/'))
+    return os.path.join('/data-store', path)
+
 def setup():
     """ App setup that needs to run once at initialization.
     """
@@ -101,6 +107,12 @@ def setup():
     data_path = sys.argv[1]
     model_file =  sys.argv[2]
     results_path = sys.argv[3]
+    run_on_cyverse = sys.argv[4] if len(sys.argv) > 4 else None
+
+    if run_on_cyverse == 'True':
+        data_path = prepend_data_store(data_path)
+        model_file = prepend_data_store(model_file)
+        results_path = prepend_data_store(results_path)
 
     return data_path, model_file, results_path
 
