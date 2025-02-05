@@ -268,7 +268,7 @@ def run_inference(batch, batch_idx, batch_size, total_images):
         image_dir = '/'.join(file_path.split('/')[:-1])
         old_file_name = file_path.split('/')[-1]
 
-        new_file_name = f"{date}_{qr_result_decoded}" if qr_result_decoded else f"{date}_{file_name}"
+        new_file_name = f"{date + '_' if date else ''}{qr_result_decoded or file_name}"
 
         if rename_files_option:
             new_file_path = f"{image_dir}/{new_file_name}.JPG"

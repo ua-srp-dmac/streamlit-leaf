@@ -7,16 +7,25 @@ import pandas as pd
 from st_aggrid import AgGrid, GridUpdateMode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 
+def prepend_data_store(path):
+    """Ensure path is prefixed with /data-store correctly."""
+    if path.startswith('/'):
+        return os.path.join('/data-store', path.lstrip('/'))
+    return os.path.join('/data-store', path)
+
 # Get the results path
 results_path = sys.argv[3]
-full_results_path = Path("/data-store") / results_path
-full_results_path = str(full_results_path.resolve())
+run_on_cyverse = sys.argv[4] if len(sys.argv) > 4 else None
+
+if run_on_cyverse == 'True':
+    results_path = prepend_data_store(results_path)
+
 
 # Collect file names
 file_names = []
 dirs = []
 
-for root, dirs, files in os.walk(full_results_path):
+for root, dirs, files in os.walk(results_path):
     for file in files:
         filename = os.path.join(root, file)
         file_names.append(filename)
