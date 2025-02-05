@@ -182,9 +182,13 @@ def run_inference(batch, batch_idx, batch_size, total_images):
         )
 
         # Load image only when needed
-        with Image.open(file_path) as img:
-            image_np = np.array(img)
-
+        try:
+            with Image.open(file_path) as img:
+                image_np = np.array(img)
+        except OSError:
+            st.error(f"Failed to open image: {file_name}")
+            continue
+        
         # Run inference
         outputs = leaf_predictor(image_np)
 
